@@ -46,8 +46,8 @@ public class EmailSender implements EmailSenderInterface
     /** 最大邮件发送尝试次数。*/
     private static int MAX_ATTEMPT_TIMES  = 3;
 
-    /** 附件大小的上限：15 MB */
-    private static int MAX_ATTACHMENT_SIZE = 15 * 1024 * 1024;
+    /** 附件大小的上限：16 MB */
+    private static int MAX_ATTACHMENT_SIZE = 16 * 1024 * 1024;
 
     /** 提供 SMTP 服务的运营商主机名 (例：smtp.gmail.com、smtp.qq.com)。*/
     private final String smtpHost;
