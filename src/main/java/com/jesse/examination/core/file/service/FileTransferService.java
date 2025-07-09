@@ -26,4 +26,13 @@ public interface FileTransferService
      */
     Mono<Void>
     saveDataFile(Path filePath, String fileName, byte[] fileData);
+
+    /**
+     * 重命名路径（响应式）。
+     *
+     * @param oldPathName 旧路径名，需要确保其存在
+     * @param newPathName 新路径名，需要确保其不存在（√）
+     */
+    Mono<Void>
+    renameDirectory(Path oldPathName, Path newPathName);
 }
