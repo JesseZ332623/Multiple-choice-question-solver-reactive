@@ -6,22 +6,15 @@ import reactor.core.publisher.Mono;
 
 public interface QuestionService
 {
-
-    /** 获取单条问题和所有选项。 */
+    /** 获取单条问题和其所有选项。 */
     Mono<ServerResponse>
     getQuestionWithOptions(ServerRequest request);
 
-    /**
-     * 查询 question 表中的所有问题和正确选项，
-     * 以及 options  表中对应的所有选项内容。
-     */
+    /** 分页查询问题和其所有选项。*/
     Mono<ServerResponse>
-    getAllQuestions(ServerRequest request);
+    getPaginatedQuestions(ServerRequest request);
 
-    /**
-     * 查询 question 表中的所有问题和正确选项，
-     * 以及 options  表中对应的正确选项内容。
-     */
+    /** 分页查询问题和其正确答案。*/
     Mono<ServerResponse>
     getAllQuestionWithCorrectOption(ServerRequest request);
 }
