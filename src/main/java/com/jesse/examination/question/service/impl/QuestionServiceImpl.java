@@ -271,7 +271,7 @@ public class QuestionServiceImpl implements QuestionService
                                 Mono.error(
                                     new ResourceNotFoundException(
                                         format(
-                                            "pagination param invalid! (page = %d, amount =%d)",
+                                            "pagination param invalid! (page = %d, amount = %d)",
                                             params.getT1(), params.getT2()
                                         )
                                     )
