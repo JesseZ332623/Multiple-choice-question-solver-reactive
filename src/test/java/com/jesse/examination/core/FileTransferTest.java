@@ -35,7 +35,7 @@ class FileTransferTest
     }
 
     @Test
-    void TestTextFileTransfer()
+    public void TestTextFileTransfer()
     {
         final String fileName = "test.json";
         final String testJson = """
@@ -64,7 +64,7 @@ class FileTransferTest
     }
 
     @Test
-    void TestDataFileTransfer()
+    public void TestDataFileTransfer()
     {
         final String fileName = "test.dat";
         final byte[] testData = new byte[16];
@@ -88,14 +88,13 @@ class FileTransferTest
         StepVerifier.create(saveDataFileStream).verifyComplete();
     }
 
-    @Test
-    void TestDirectoryRename()
+    private void directoryRenameHandle(String oldName, String newName)
     {
         Path oldPath
-            = Path.of(storageFilePath).resolve("Jesse").normalize();
+            = Path.of(storageFilePath).resolve(oldName).normalize();
 
         Path newPath
-            = Path.of(storageFilePath).resolve("Jesse_EC").normalize();
+            = Path.of(storageFilePath).resolve(newName).normalize();
 
         Mono<Void> renameDirectoryStream
             = this.fileTransferService
@@ -112,5 +111,12 @@ class FileTransferTest
                  });
 
         StepVerifier.create(renameDirectoryStream).verifyComplete();
+    }
+
+    @Test
+    public void TestDirectoryRename()
+    {
+        this.directoryRenameHandle("Jesse", "Jesse_EC");
+        this.directoryRenameHandle("Jesse_EC", "Jesse");
     }
 }
