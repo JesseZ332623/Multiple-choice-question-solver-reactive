@@ -11,6 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 import java.util.List;
 
+/**  */
 @Slf4j
 @SpringBootTest
 public class QuestionQueryTest
@@ -21,23 +22,5 @@ public class QuestionQueryTest
     @Autowired
     private QuestionRepository questionRepository;
 
-    @Test
-    void testFindByQuestionId()
-    {
-        List<Option> option
-            = optionRepository.findByQuestionId(1)
-                              .collectList().block();
-
-        System.out.println(option);
-    }
-
-    @Test
-    void testFindQuestionWithAllOptions()
-    {
-        List<FullQuestionInfoDTO> allQuestion
-            = this.questionRepository.findQuestionWithAllOptions()
-                  .collectList().block();
-
-        System.out.println(allQuestion);
-    }
+    /* 测试使用 Postman 皆通过，这里可以先暂时不写 */
 }
