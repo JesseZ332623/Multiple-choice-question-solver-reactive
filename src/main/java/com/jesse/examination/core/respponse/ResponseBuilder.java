@@ -35,7 +35,7 @@ public class ResponseBuilder
     public static class APIResponse<T>
     {
         /** 响应时间戳（默认是构造本响应体那一刻的时间）*/
-        private final long TIME_STAMP = Instant.now().toEpochMilli();
+        private final long timestamp = Instant.now().toEpochMilli();
 
         /** 响应码 */
         private HttpStatus status;
@@ -472,6 +472,28 @@ public class ResponseBuilder
         );
     }
 
+    /** CREATED 响应的预设构建。*/
+    public @NotNull Mono<ServerResponse>
+    CREATED(
+        URI location, String customMessage,
+        Object body, Set<Link> hateOASLink
+    )
+    {
+        return this.buildCreated(
+            location, body, customMessage,
+            (headers) -> {
+                /*
+                 * X-RateLimit-Remaining 用于提示客户端，
+                 * 还可以发起多少个请求，如果客户端的请求数超过这个值就会被拦截，
+                 * 并返回 429 Too Many Requests 状态码。
+                 */
+                headers.add("X-RateLimit-Remaining", "100");
+                headers.add("X-Custom-Header", "value");
+                headers.setContentType(MediaType.APPLICATION_JSON);
+            }, hateOASLink
+        );
+    }
+
     /** BAD REQUEST 响应的预设构建。*/
     public @NotNull Mono<ServerResponse>
     BAD_REQUEST(String message, Throwable exception)
@@ -496,25 +518,15 @@ public class ResponseBuilder
         );
     }
 
-    /** CREATED 响应的预设构建。*/
+    /** INTERNAL_SERVER_ERROR 响应的预设构建。*/
     public @NotNull Mono<ServerResponse>
-    CREATED(
-        URI location, String customMessage,
-        Object body, Set<Link> hateOASLink
-    )
+    INTERNAL_SERVER_ERROR(String message, Throwable exception)
     {
-        return this.buildCreated(
-            location, body, customMessage,
-            (headers) -> {
-                /*
-                 * X-RateLimit-Remaining 用于提示客户端，
-                 * 还可以发起多少个请求，如果客户端的请求数超过这个值就会被拦截，
-                 * 并返回 429 Too Many Requests 状态码。
-                 */
-                headers.add("X-RateLimit-Remaining", "100");
-                headers.add("X-Custom-Header", "value");
-                headers.setContentType(MediaType.APPLICATION_JSON);
-            }, hateOASLink
+        return this.buildError(
+            HttpStatus.INTERNAL_SERVER_ERROR, message,
+            exception,
+            headers ->
+                headers.setContentType(MediaType.APPLICATION_JSON)
         );
     }
 
