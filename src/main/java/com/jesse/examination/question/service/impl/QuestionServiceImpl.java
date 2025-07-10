@@ -178,9 +178,8 @@ public class QuestionServiceImpl implements QuestionService
     {
         return Mono.fromCallable(
             () -> {
-                int totalPage = (Math.toIntExact((totalItem % amount)) == 0)
-                    ? Math.toIntExact((totalItem / amount))
-                    : Math.toIntExact((totalItem / amount)) + 1;
+                int totalPage
+                    = (int) Math.ceil((double) (totalItem / amount));
 
                 Set<Link> links = new HashSet<>();
 
@@ -249,37 +248,38 @@ public class QuestionServiceImpl implements QuestionService
                 this.questionRepository.count().flatMap(
                     (count) ->
                     {
-                        int springPage = params.getT1() > 0 ? params.getT1() - 1 : 0;   // 计算第几页
-                        int offset = springPage * params.getT2();                       // 计算这一页对应的偏移量
+                        int page   = params.getT1();
+                        int amount = params.getT2();
+
+                        int offset = (page - 1) * amount;  // 计算这一页对应的偏移量
 
                         if (offset > count)
                         {
                             return Mono.error(
                                 new PaginationOffsetOutOfRangeException(
                                     format(
-                                        "Input page (which is: %d) param is to large!",
-                                        params.getT1()
+                                        "Input page (which is: %d) param is to large!", page
                                     )
                                 )
                             );
                         }
 
                         return this.questionRepository
-                            .findAllQuestionWithAllOptions(params.getT2(), offset)
+                            .findAllQuestionWithAllOptions(amount, offset)
                             .timeout(Duration.ofSeconds(5))
                             .switchIfEmpty(
                                 Mono.error(
                                     new ResourceNotFoundException(
                                         format(
                                             "pagination param invalid! (page = %d, amount = %d)",
-                                            params.getT1(), params.getT2()
+                                            page, amount
                                         )
                                     )
                                 )
                             )
                             .collectList()
                             .flatMap((questions) ->
-                                this.getQuestionPaginationQueryLink(params.getT1(), params.getT2(), count)
+                                this.getQuestionPaginationQueryLink(page, amount, count)
                                     .flatMap(
                                         (links) ->
                                         {
@@ -297,8 +297,8 @@ public class QuestionServiceImpl implements QuestionService
                                             response.setData(questions);
                                             response.setMessage(
                                                 format(
-                                                    "Query score record (Page = %d, Amount = %d) complete!",
-                                                    params.getT1(), params.getT2()
+                                                    "Query questions (Page = %d, Amount = %d) complete!",
+                                                    page, amount
                                                 )
                                             );
 
@@ -360,37 +360,38 @@ public class QuestionServiceImpl implements QuestionService
                 this.questionRepository.count().flatMap(
                     (count) ->
                     {
-                        int springPage = params.getT1() > 0 ? params.getT1() - 1 : 0;   // 计算第几页
-                        int offset = springPage * params.getT2();                       // 计算这一页对应的偏移量
+                        int page   = params.getT1();
+                        int amount = params.getT2();
+
+                        int offset = (page - 1) * params.getT2();                       // 计算这一页对应的偏移量
 
                         if (offset > count)
                         {
                             return Mono.error(
                                 new PaginationOffsetOutOfRangeException(
                                     format(
-                                        "Input page (which is: %d) param is to large!",
-                                        params.getT1()
+                                        "Input page (which is: %d) param is to large!", page
                                     )
                                 )
                             );
                         }
 
                         return this.questionRepository
-                            .findAllQuestionWithCorrectAnswer(params.getT2(), offset)
+                            .findAllQuestionWithCorrectAnswer(amount, offset)
                             .timeout(Duration.ofSeconds(5))
                             .switchIfEmpty(
                                 Mono.error(
                                     new ResourceNotFoundException(
                                         format(
                                             "pagination param invalid! (page = %d, amount = %d)",
-                                            params.getT1(), params.getT2()
+                                            page, amount
                                         )
                                     )
                                 )
                             )
                             .collectList()
                             .flatMap((questions) ->
-                                this.getQuestionPaginationQueryLink(params.getT1(), params.getT2(), count)
+                                this.getQuestionPaginationQueryLink(page, amount, count)
                                     .flatMap(
                                         (links) ->
                                         {
@@ -404,12 +405,12 @@ public class QuestionServiceImpl implements QuestionService
                                                 );
                                             }
 
-                                            response.withPagination(params.getT1(), params.getT2(), count);
+                                            response.withPagination(page, amount, count);
                                             response.setData(questions);
                                             response.setMessage(
                                                 format(
                                                     "Query score record (Page = %d, Amount = %d) complete!",
-                                                    params.getT1(), params.getT2()
+                                                    page, amount
                                                 )
                                             );
 
