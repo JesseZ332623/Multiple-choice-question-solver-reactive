@@ -10,6 +10,9 @@ import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.reactive.function.server.ServerResponse;
 
+import static com.jesse.examination.question.route.QuestionServiceURL.*;
+
+/** 问题查询模块路由函数配置类。 */
 @Slf4j
 @Configuration
 @EnableWebFlux
@@ -23,8 +26,9 @@ public class QuestionRouteConfig
     questionRouteFunction()
     {
         return RouterFunctions.route()
-            .GET("/api/question",     this.questionService::getQuestionWithOptions)
-            .GET("/api/all_question", this.questionService::getAllQuestions)
+            .GET(SINGLE_QUERY_URI,     this.questionService::getQuestionWithOptions)
+            .GET(PAGINATION_QUERY_URI, this.questionService::getPaginatedQuestions)
+            .GET(PAGINATION_QUERY_WITH_CORRECT_URI, this.questionService::getAllQuestionWithCorrectOption)
             .build();
     }
 }
