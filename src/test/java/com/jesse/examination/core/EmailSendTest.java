@@ -42,7 +42,7 @@ public class EmailSendTest
      * 将邮箱发送人的邮箱号和服务授权码读出，按指定 key 存入 Redis。
      */
     @PostConstruct
-    void readEmailPublisherInfo()
+    private void readEmailPublisherInfo()
     {
         Mono<Boolean> readPublisherInfo
             = this.emailAuthQueryService
@@ -89,7 +89,7 @@ public class EmailSendTest
     }
 
     @Test
-    void EmailSenderTest()
+    public void EmailSenderTest()
     {
         Mono<AbstractMap.SimpleEntry<Boolean, String>> sendEmailStream
             = VarifyCodeGenerator.generateVarifyCode(8).flatMap(
