@@ -336,8 +336,18 @@ public class QuestionServiceImpl implements QuestionService
     }
 
     /**
-     * 查询 question 表中的所有问题和正确选项，
-     * 以及 options  表中对应的正确选项内容。
+     * 分页的获取所有问题的
+     * ID，内容，正确选项，正确答案（具体的 URL 和参数见文档）。
+     *
+     * @param request 从前端传来的请求体
+     *
+     * @throws IllegalArgumentException             当请求体的参数不存在或非法时抛出
+     * @throws PaginationOffsetOutOfRangeException  当计算出的偏移量不在数据总数范围内时抛出
+     * @throws ResourceNotFoundException            当查询数据不存在时抛出
+     * @throws TimeoutException                     当查询因某些原因超时时抛出
+     * @throws DataAccessResourceFailureException   当因网络波动等原因拿不到数据库连接时抛出
+     *
+     * @return 返回组装好地响应体。
      */
     @Override
     public @NotNull Mono<ServerResponse>
