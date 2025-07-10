@@ -27,17 +27,21 @@ public class URLParamPrase
     public static Mono<String>
     praseRequestParam(ServerRequest request, String paramName)
     {
-        if (request.queryParam(paramName).isEmpty())
-        {
-            throw new IllegalArgumentException(
-                format(
-                    "Parameter name [%s] not exist in request!",
-                    paramName
-                )
-            );
-        }
+        return Mono.fromCallable(
+            () -> {
+                if (request.queryParam(paramName).isEmpty())
+                {
+                    throw new IllegalArgumentException(
+                        format(
+                            "Parameter name [%s] not exist in request!",
+                            paramName
+                        )
+                    );
+                }
 
-        return Mono.just(request.queryParam(paramName).get());
+                return request.queryParam(paramName).get();
+            }
+        );
     }
 
     /**
@@ -51,6 +55,9 @@ public class URLParamPrase
      *     </code>
      *     ，返回整数 114。
      * </p>
+     *
+     * @param <T> 由于本方法是 T 的生成者，所以需要规定 T 的上界，
+     *            即 T 可以说由 Number 派生下来的所以类型
      *
      * @param request    从前端传来的 HTTP 请求实例
      * @param paramName  参数名
@@ -75,8 +82,11 @@ public class URLParamPrase
             .map((param) -> {
                 T number = converter.apply(param);
 
-                if (number.doubleValue() < 0) {
-                    throw new IllegalArgumentException("Parameter not less than 0!");
+                if (number.doubleValue() < 0)
+                {
+                    throw new IllegalArgumentException(
+                        format("Parameter: [%s] not less than 0!", paramName)
+                    );
                 }
 
                 return number;
