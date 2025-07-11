@@ -27,7 +27,8 @@ public class JsonToOptionsMapConverter
         {
             Map<String, String> tempMap
                 = mapper.readValue(
-                optionsJson, new TypeReference<Map<String, String>>() {}
+                optionsJson, new TypeReference<>() {
+                }
             );
 
             Map<AnswerOption, String> result = new TreeMap<>();
