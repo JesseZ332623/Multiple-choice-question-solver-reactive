@@ -7,6 +7,10 @@ import reactor.core.publisher.Mono;
 /** 成绩表服务接口类。*/
 public interface ScoreRecordService
 {
+    /** 通过 ID 查询单条成绩。*/
+    Mono<ServerResponse>
+    findScoreRecordById(ServerRequest request);
+
     /** 分页查找指定用户的所有成绩记录。*/
     Mono<ServerResponse>
     findPaginatedScoreRecordByUserName(ServerRequest request);
