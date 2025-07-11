@@ -55,6 +55,31 @@ public class QuestionServiceImpl implements QuestionService
     }
 
     /**
+     * 本服务实现通用的错误处理类，
+     * 按照不同的异常返回不同的响应体。
+     */
+    private Mono<ServerResponse>
+    genericErrorHandle(Mono<ServerResponse> mono)
+    {
+        return mono.onErrorResume(
+            IllegalArgumentException.class,
+            (exception) ->
+                this.responseBuilder.BAD_REQUEST(exception.getMessage(), exception)
+        ).onErrorResume(
+            ResourceNotFoundException.class,
+            (exception) ->
+                this.responseBuilder.NOT_FOUND(exception.getMessage(), exception)
+        ).onErrorResume(
+            TimeoutException.class,
+            (exception) ->
+                this.responseBuilder.INTERNAL_SERVER_ERROR(exception.getMessage(), exception)
+        ).onErrorResume(DataAccessResourceFailureException.class,
+            (exception) ->
+                this.responseBuilder.INTERNAL_SERVER_ERROR(exception.getMessage(), exception)
+        );
+    }
+
+    /**
      * 在单条查询问题数据的时候，
      * 拼装响应体的 HATEOAS 元数据。
      *
@@ -88,7 +113,7 @@ public class QuestionServiceImpl implements QuestionService
 
                     links.add(
                         new Link("first",
-                            SINGLE_QUERY_URI + QUESTION_ROOT_URI + "?id=1",
+                            SINGLE_QUERY_URI + "?id=1",
                             HttpMethod.GET
                         )
                     );
@@ -121,7 +146,8 @@ public class QuestionServiceImpl implements QuestionService
     public @NotNull Mono<ServerResponse>
     getQuestionWithOptions(ServerRequest request)
     {
-        return praseNumberRequestParam(request, "id", Integer::parseInt)
+        Mono<ServerResponse> responseMono
+            = praseNumberRequestParam(request, "id", Integer::parseInt)
             .flatMap(
                 (id) ->
                     this.questionRepository.findOneQuestionWithAllOptions(id)
@@ -140,28 +166,15 @@ public class QuestionServiceImpl implements QuestionService
                             this.responseBuilder.OK(
                                 question,
                                 format(
-                                    "Query question id = {%d} Success!",
+                                    "Query question id = {%d} success!",
                                     question.getQuestionId()
                                 ),
                                 null, links
                             )
                     )
-            ).onErrorResume(
-                IllegalArgumentException.class,
-                (exception) ->
-                    this.responseBuilder.BAD_REQUEST(exception.getMessage(), exception)
-            ).onErrorResume(
-                ResourceNotFoundException.class,
-                (exception) ->
-                    this.responseBuilder.NOT_FOUND(exception.getMessage(), exception)
-            ).onErrorResume(
-                TimeoutException.class,
-                (exception) ->
-                    this.responseBuilder.INTERNAL_SERVER_ERROR(exception.getMessage(), exception)
-            ).onErrorResume(DataAccessResourceFailureException.class,
-                (exception) ->
-                    this.responseBuilder.INTERNAL_SERVER_ERROR(exception.getMessage(), exception)
             );
+
+        return this.genericErrorHandle(responseMono);
     }
 
     /**
@@ -241,7 +254,8 @@ public class QuestionServiceImpl implements QuestionService
     public @NotNull Mono<ServerResponse>
     getPaginatedQuestions(ServerRequest request)
     {
-        return Mono.zip(
+        Mono<ServerResponse> responseMono
+            = Mono.zip(
                 praseNumberRequestParam(request, "page", Integer::parseInt),
                 praseNumberRequestParam(request, "amount", Integer::parseInt)
             ).flatMap((params) ->
@@ -312,27 +326,12 @@ public class QuestionServiceImpl implements QuestionService
                     }
                 ))
             .onErrorResume(
-                IllegalArgumentException.class,
-                (exception) ->
-                    this.responseBuilder.BAD_REQUEST(exception.getMessage(), exception)
-            )
-            .onErrorResume(
                 PaginationOffsetOutOfRangeException.class,
                 (exception) ->
                     this.responseBuilder.BAD_REQUEST(exception.getMessage(), exception)
-            )
-            .onErrorResume(
-                ResourceNotFoundException.class,
-                (exception) ->
-                    this.responseBuilder.NOT_FOUND(exception.getMessage(), exception)
-            ).onErrorResume(
-                TimeoutException.class,
-                (exception) ->
-                    this.responseBuilder.INTERNAL_SERVER_ERROR(exception.getMessage(), exception)
-            ).onErrorResume(DataAccessResourceFailureException.class,
-                (exception) ->
-                    this.responseBuilder.INTERNAL_SERVER_ERROR(exception.getMessage(), exception)
             );
+
+        return this.genericErrorHandle(responseMono);
     }
 
     /**
@@ -353,7 +352,8 @@ public class QuestionServiceImpl implements QuestionService
     public @NotNull Mono<ServerResponse>
     getAllQuestionWithCorrectOption(ServerRequest request)
     {
-        return Mono.zip(
+        Mono<ServerResponse> responseMono
+            = Mono.zip(
                 praseNumberRequestParam(request, "page", Integer::parseInt),
                 praseNumberRequestParam(request, "amount", Integer::parseInt)
             ).flatMap((params) ->
@@ -424,26 +424,11 @@ public class QuestionServiceImpl implements QuestionService
                     }
                 ))
             .onErrorResume(
-                IllegalArgumentException.class,
-                (exception) ->
-                    this.responseBuilder.BAD_REQUEST(exception.getMessage(), exception)
-            )
-            .onErrorResume(
                 PaginationOffsetOutOfRangeException.class,
                 (exception) ->
                     this.responseBuilder.BAD_REQUEST(exception.getMessage(), exception)
-            )
-            .onErrorResume(
-                ResourceNotFoundException.class,
-                (exception) ->
-                    this.responseBuilder.NOT_FOUND(exception.getMessage(), exception)
-            ).onErrorResume(
-                TimeoutException.class,
-                (exception) ->
-                    this.responseBuilder.INTERNAL_SERVER_ERROR(exception.getMessage(), exception)
-            ).onErrorResume(DataAccessResourceFailureException.class,
-                (exception) ->
-                    this.responseBuilder.INTERNAL_SERVER_ERROR(exception.getMessage(), exception)
             );
+
+        return this.genericErrorHandle(responseMono);
     }
 }
