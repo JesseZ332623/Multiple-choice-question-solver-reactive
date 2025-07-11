@@ -23,7 +23,12 @@ public class ScoreRouteConfig
     {
         return RouterFunctions
             .route()
+            .GET(SINGLE_SCORE_QUERY_URI,    scoreRecordService::findScoreRecordById)
             .GET(PAGINATED_SCORE_QUERY_URI, scoreRecordService::findPaginatedScoreRecordByUserName)
+            .GET(LATEST_SCORE_QUERY_URI,    scoreRecordService::findLatestScoreRecordByUserName)
+            .POST(INSERT_NEW_SCORE_URI,     scoreRecordService::insertNewScoreRecordByUserId)
+            .DELETE(DELETE_SCORE_URI,       scoreRecordService::deleteAllScoreRecordByUserName)
+            .DELETE(TRUNCATE_SCORE_URI,     scoreRecordService::truncateScoreRecordTable)
             .build();
     }
 }
