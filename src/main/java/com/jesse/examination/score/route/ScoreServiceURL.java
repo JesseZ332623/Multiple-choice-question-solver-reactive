@@ -7,6 +7,9 @@ public class ScoreServiceURL
     final public static String SCORE_RECORD_ROOT_URI
         = "/api/score";
 
+    final public static String SINGLE_SCORE_QUERY_URI
+        = SCORE_RECORD_ROOT_URI + "/single_query";
+
     /** 分页查找指定用户的所有成绩记录 URI。*/
     final public static String PAGINATED_SCORE_QUERY_URI
         = SCORE_RECORD_ROOT_URI + "/paginated_query";
