@@ -9,9 +9,7 @@ import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.LocalDateTime;
-
-/** 成绩表仓储类。 */
+/** 成绩表仓储类。*/
 public interface ScoreRecordRepository
     extends ReactiveCrudRepository<ScoreRecord, Integer>
 {
@@ -59,40 +57,15 @@ public interface ScoreRecordRepository
         @Param("userName") String userName
     );
 
-    /** 为指定用户插入一条新的成绩。*/
-    @Modifying
-    @Query("""
-           INSERT INTO score_record(
-                user_id, submit_date,
-                correct_count, error_count, no_answer_count
-           )
-           VALUES(
-               :userId, :submitDate,
-               :correctCount, :errorCount, :noAnswerCount
-           )
-           """
-    )
-    Mono<Void>
-    insertNewScoreRecordByUserId(
-        @Param("userId")        Long userId,
-        @Param("submitDate")    LocalDateTime submitDate,
-        @Param("correct_count") Integer correctCount,
-        @Param("errorCount")    Integer errorCount,
-        @Param("noAnswerCount") Integer noAnswerCount
-    );
-
     /** 删除指定用户对应的所有成绩，返回删除的行数。*/
     @Modifying
     @Query("""
         DELETE FROM score_record
-        WHERE user_id IN (
-            SELECT user_id FROM users
-            WHERE user_name = :userName
-        )
+        WHERE user_id = :userId
         """)
     Mono<Integer>
     deleteAllScoreRecordByUserName(
-        @Param("userName") String userName
+        @Param("userId") Long userId
     );
 
     /** 清空成绩表。*/
