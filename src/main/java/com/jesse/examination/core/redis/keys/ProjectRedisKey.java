@@ -5,41 +5,38 @@ import org.jetbrains.annotations.NotNull;
 /** 项目中需要用到的所有 Redis 键枚举类。 */
 public enum ProjectRedisKey implements CharSequence
 {
-    /**
-     * <p>某普通用户登录状态确认 Redis 键。</p>
-     * <p>
-     *     格式为：
-     *     <pre>
-     *         K: LOGIN_STATUS_OF_USER_[USER_NAME]
-     *         V: String
-     *     </pre>
-     * </p>
-     */
-    USER_LOGIN_STATUS_KEY("LOGIN_STATUS_OF_USER_"),
 
     /**
-     * <p>某管理员登录状态确认 Redis 键。</p>
+     * <p>用户数据存储根键</p>
+     *
+     * <p>我所设想的 Redis 用户数据存储树形图因该是这样的：</p>
+     * <code><pre>
+     * user
+     *   |—— Jesse
+     *   |      |—— varify_code (String)
+     *   |      |—— ques_correct_times (HashMap)
+     *   |—— Peter
+     *   |      |—— varify_code (String)
+     *   |      |—— ques_correct_times (HashMap)
+     *   |—— Mike
+     *   |      |—— varify_code (String)
+     *   |      |—— ques_correct_times (HashMap)
+     *   |
+     *   ......
+     *</pre></code>
+     *
      * <p>
-     *     格式为：
-     *     <pre>
-     *         K: LOGIN_STATUS_OF_ADMIN_[ADMIN_NAME]
-     *         V: String
-     *     </pre>
+     *     相比起以前版本所有数据分开存储，
+     *     合理规划 key 的设计令数据关系更清晰。
      * </p>
      */
-    ADMIN_LOGIN_STATUS_KEY("LOGIN_STATUS_OF_ADMIN_"),
+    USER_INFO_ROOT_KEY("user"),
 
-    /**
-     * <p>用户所有问题答对次数列表的 Redis 键。</p>
-     * <p>
-     *     格式为：
-     *     <pre>
-     *         K: CORRECT_TIMES_LIST_OF_[USER_NAME]
-     *         V: List（准确来说是 List{@literal <List>}）
-     *     </pre>
-     * </p>
-     */
-    CORRECT_TIMES_LIST_KEY("CORRECT_TIMES_LIST_OF_"),
+    /** 用户问题答对次数哈希表子键。 */
+    QUESTION_CORRECT_TIME("ques-correct-times"),
+
+    /** 用户验证码子键。 */
+    VARIFY_CODE("varify-code"),
 
     /**
      * <p>验证码发起者邮箱 Redis 键。</p>
@@ -63,19 +60,7 @@ public enum ProjectRedisKey implements CharSequence
      *     </pre>
      * </p>
      */
-    SERVICE_AUTH_CODE("SERVICE_AUTH_CODE"),
-
-    /**
-     * <p>某用户请求的验证码键。</p>
-     * <p>
-     *     格式为：
-     *     <pre>
-     *         K: VERIFY_CODE_FOR_[USER_NAME]
-     *         V: String
-     *     </pre>
-     * </p>
-     */
-    USER_VERIFYCODE_KEY("VERIFY_CODE_FOR_");
+    SERVICE_AUTH_CODE("SERVICE_AUTH_CODE");
 
     final String keyName;
 
