@@ -22,10 +22,10 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 
-import static com.jesse.examination.core.redis.keys.ProjectRedisKey.USER_VERIFYCODE_KEY;
+import static com.jesse.examination.core.redis.keys.ConcatRedisKey.varifyCodeKey;
 import static com.jesse.examination.core.logmakers.LogMakers.REDIS_BASIC;
 
-/** Redis 基础操作测试。 */
+/** Redis 基础操作测试。*/
 @Slf4j
 @SpringBootTest
 @ContextConfiguration(classes = { ReactiveRedisConfig.class, RedisTest.RedisTestConfig.class })
@@ -72,7 +72,7 @@ public class RedisTest
         userVarifyCodes.put("John", "123456");
 
         userVarifyCodes.forEach((name, code) -> {
-            final String key = USER_VERIFYCODE_KEY + name;
+            final String key = varifyCodeKey(name);
 
             Mono<Boolean> saveDataStream
                 = this.redisTemplate.opsForValue()
