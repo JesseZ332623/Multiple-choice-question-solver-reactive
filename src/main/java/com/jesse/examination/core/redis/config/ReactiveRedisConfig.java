@@ -4,14 +4,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
-import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
-import org.springframework.data.redis.serializer.RedisSerializationContext;
-import org.springframework.data.redis.serializer.RedisSerializer;
-import org.springframework.data.redis.serializer.StringRedisSerializer;
+import org.springframework.data.redis.serializer.*;
 
-/**
- * 响应式 Redis 服务的配置类。
- */
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+
+/** 响应式 Redis 服务的配置类。*/
 @Configuration
 public class ReactiveRedisConfig
 {
@@ -35,6 +33,9 @@ public class ReactiveRedisConfig
         Jackson2JsonRedisSerializer<Object> valueSerializer
             = new Jackson2JsonRedisSerializer<>(Object.class);
 
+        LongRedisSerializer longRedisSerializer
+            = new LongRedisSerializer();
+
         /* Redis Hash Key/Value 的序列化。 */
         RedisSerializationContext.RedisSerializationContextBuilder<String, Object>
             builder = RedisSerializationContext.newSerializationContext(keySerializer);
@@ -44,9 +45,33 @@ public class ReactiveRedisConfig
             = builder.value(valueSerializer)
                      .hashKey(keySerializer)
                      .hashValue(valueSerializer)
+                     .hashValue(longRedisSerializer)
                      .build();
 
         /* 根据上述配置构建 ReactiveRedisTemplate。 */
         return new ReactiveRedisTemplate<>(factory, context);
+    }
+
+    static class LongRedisSerializer implements RedisSerializer<Long>
+    {
+        private final Charset charset = StandardCharsets.UTF_8;
+
+        /** Long 类型的序列化。*/
+        @Override
+        public byte[] serialize(Long number) throws SerializationException
+        {
+            return number == null
+                ? null
+                : number.toString().getBytes(charset);
+        }
+
+        /** Long 类型的反序列化。*/
+        @Override
+        public Long deserialize(byte[] bytes) throws SerializationException
+        {
+            return bytes == null
+                ? null
+                : Long.parseLong(new String(bytes, charset));
+        }
     }
 }
