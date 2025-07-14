@@ -1,7 +1,7 @@
-package com.jesse.examination.question;
+package com.jesse.examination.user;
 
-import com.jesse.examination.question.redis.QuestionRedisService;
 import com.jesse.examination.question.repository.QuestionRepository;
+import com.jesse.examination.user.redis.UserRedisService;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,10 +16,10 @@ import java.util.concurrent.ThreadLocalRandom;
 
 @Slf4j
 @SpringBootTest
-public class QuestionRedisTest
+public class UserRedisServiceTest
 {
     @Autowired
-    private QuestionRedisService questionRedisService;
+    private UserRedisService userRedisService;
 
     @Autowired
     private QuestionRepository questionRepository;
@@ -29,15 +29,14 @@ public class QuestionRedisTest
     @Test
     void TestLoadUserQuestionCorrectTimes()
     {
-        Map<String, Long> quesCorrectTimesMap
-            = new HashMap<>();
+        Map<String, Long> quesCorrectTimesMap = new HashMap<>();
 
         long totalQuestionAmount
             = Objects.requireNonNull(
-                this.questionRepository.count().block()
+            this.questionRepository.count().block()
         );
 
-        for (long index = 0; index < totalQuestionAmount; ++index)
+        for (long index = 1; index <= totalQuestionAmount; ++index)
         {
             quesCorrectTimesMap.put(
                 String.valueOf(index),
@@ -46,15 +45,15 @@ public class QuestionRedisTest
         }
 
         Mono<Boolean> isOperatorSuccess
-            = this.questionRedisService
-                  .loadUserQuestionCorrectTimes(
-                      "Jesse", quesCorrectTimesMap
-                  );
+            = this.userRedisService
+            .loadUserQuestionCorrectTimes(
+                "Jesse", quesCorrectTimesMap
+            );
 
         StepVerifier.create(isOperatorSuccess)
-                    .expectNext(true).verifyComplete();
+            .expectNext(true).verifyComplete();
 
-        this.questionRedisService
+        this.userRedisService
             .getUserQuestionCorrectTimes("Jesse")
             .doOnSuccess((map) ->
                 map.forEach((k, v) ->
