@@ -52,13 +52,13 @@ class FileTransferTest
         Mono<Void> saveTextFileStream
             = this.fileTransferService.saveTextFile(
                 Paths.get(storageFilePath).normalize(), fileName, testJson
-            ).doOnSuccess((ignore) -> {
+            ).doOnSuccess((ignore) ->
                 log.info(
                     "[TestTextFileTransfer()] Save {} file {} complete!",
                     getFileExtension(fileName),
                     Paths.get(storageFilePath).resolve(fileName).normalize()
-                );
-        });
+                )
+            );
 
         StepVerifier.create(saveTextFileStream).verifyComplete();
     }
@@ -77,13 +77,13 @@ class FileTransferTest
             = this.fileTransferService.saveDataFile(
                 Paths.get(storageFilePath).normalize(),
                 fileName, testData
-        ).doOnSuccess((ignore) -> {
+        ).doOnSuccess((ignore) ->
             log.info(
                 "[TestDataFileTransfer()] Save {} file {} complete!",
                 getFileExtension(fileName),
                 Paths.get(storageFilePath).resolve(fileName).normalize()
-            );
-        });
+            )
+        );
 
         StepVerifier.create(saveDataFileStream).verifyComplete();
     }
