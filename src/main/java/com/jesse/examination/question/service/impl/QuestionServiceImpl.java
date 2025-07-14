@@ -6,6 +6,7 @@ import com.jesse.examination.core.respponse.ResponseBuilder;
 import com.jesse.examination.core.exception.ResourceNotFoundException;
 import com.jesse.examination.question.dto.FullQuestionInfoDTO;
 import com.jesse.examination.question.dto.QuestionWithCorrectDTO;
+import com.jesse.examination.question.redis.impl.QuestionRedisServiceImpl;
 import com.jesse.examination.question.repository.QuestionRepository;
 import com.jesse.examination.question.service.QuestionService;
 import io.netty.handler.timeout.TimeoutException;
@@ -27,6 +28,7 @@ import java.util.*;
 
 import static com.jesse.examination.core.respponse.ResponseBuilder.APIResponse;
 import static com.jesse.examination.core.respponse.URLParamPrase.praseNumberRequestParam;
+import static com.jesse.examination.core.respponse.URLParamPrase.praseRequestParam;
 import static com.jesse.examination.question.route.QuestionServiceURL.*;
 import static java.lang.String.format;
 
@@ -40,6 +42,9 @@ public class QuestionServiceImpl implements QuestionService
 
     @Autowired
     private QuestionRepository questionRepository;
+
+    @Autowired
+    private QuestionRedisServiceImpl questionRedisService;
 
     /**
      * 连接池预热操作，
@@ -428,6 +433,137 @@ public class QuestionServiceImpl implements QuestionService
                 (exception) ->
                     this.responseBuilder.BAD_REQUEST(exception.getMessage(), exception)
             );
+
+        return this.genericErrorHandle(responseMono);
+    }
+
+    /** 用户在练习时答对了一道题，这题的答对次数 + 1。*/
+    public Mono<ServerResponse>
+    incrementUserQuestionCorrectTime(ServerRequest request)
+    {
+        Mono<String> userNameMono
+            = praseRequestParam(request, "name");
+
+        Mono<Long> questionIdMono
+            = praseNumberRequestParam(
+                request, "ques_id", Long::parseLong
+            );
+
+        Mono<ServerResponse> responseMono
+            = Mono.zip(userNameMono, questionIdMono)
+            .flatMap((params) ->
+            {
+                String userName   = params.getT1();
+                Long   questionId = params.getT2();
+
+                 return this.questionRedisService
+                            .incrementUserQuestionCorrectTime(userName, questionId)
+                            .flatMap((newVal) ->
+                            {
+                                if (newVal != -1)
+                                {
+                                    return this.responseBuilder.OK(
+                                        newVal, format(
+                                            "Set user: %s question id: %d correct times to %d complete!",
+                                            userName, questionId, newVal
+                                        ),
+                                        null, null
+                                    );
+                                }
+                                else
+                                {
+                                    return this.responseBuilder.BAD_REQUEST(
+                                        format(
+                                            "Set user: %s question id: %d correct times plus one failed!",
+                                            userName, questionId
+                                        ), null
+                                    );
+                                }
+                            });
+            });
+
+        return this.genericErrorHandle(responseMono);
+    }
+
+    /** 将某用户的某道问题的答对次数设为 value。*/
+    public Mono<ServerResponse>
+    setUserQuestionCorrectTime(ServerRequest request)
+    {
+        Mono<String> userNameMono
+            = praseRequestParam(request, "name");
+
+        Mono<Long> questionIdMono
+            = praseNumberRequestParam(
+            request, "ques_id", Long::parseLong
+        );
+
+        Mono<Long> newValMono
+            = praseNumberRequestParam(
+                request, "value", Long::parseLong
+        );
+
+        Mono<ServerResponse> responseMono
+            = Mono.zip(userNameMono, questionIdMono, newValMono)
+            .flatMap((params) ->
+            {
+                String userName   = params.getT1();
+                Long   questionId = params.getT2();
+                Long   value      = params.getT3();
+
+                return this.questionRedisService
+                           .setUserQuestionCorrectTime(userName, questionId, value)
+                           .flatMap((newVal) ->
+                           {
+                               System.out.printf(
+                                   "[setUserQuestionCorrectTime()] Return val = %d%n",
+                                   newVal
+                               );
+
+                               if (newVal != -1)
+                               {
+                                   return this.responseBuilder.OK(
+                                       newVal, format(
+                                           "Set user: %s question id: %d correct times to %d complete!",
+                                           userName, questionId, newVal
+                                       ),
+                                       null, null
+                                   );
+                               }
+                               else
+                               {
+                                   return this.responseBuilder.BAD_REQUEST(
+                                       format(
+                                           "Set user: %s question id: %d correct times failed!",
+                                           userName, questionId
+                                       ), null
+                                   );
+                               }
+                           });
+            });
+
+        return this.genericErrorHandle(responseMono);
+    }
+
+    /** 将某用户所有问题的答对次数清空为 0。 */
+    public Mono<ServerResponse>
+    clearUserQuestionCorrectTime(ServerRequest request)
+    {
+        Mono<ServerResponse> responseMono
+            = praseRequestParam(request, "name")
+              .flatMap((userName) ->
+                  this.questionRedisService
+                      .clearUserQuestionCorrectTime(userName)
+                      .flatMap((isSuccess) ->
+                          (isSuccess)
+                              ? this.responseBuilder.OK(
+                                null, format("Clear user: %s question correct times complete!", userName),
+                                null, null)
+                              : this.responseBuilder.BAD_REQUEST(
+                                    format(
+                                        "Clear user: %s question correct times failed!", userName),
+                                   null)
+                      )
+              );
 
         return this.genericErrorHandle(responseMono);
     }
