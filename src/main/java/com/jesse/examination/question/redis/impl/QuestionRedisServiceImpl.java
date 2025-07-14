@@ -1,26 +1,22 @@
 package com.jesse.examination.question.redis.impl;
 
 import com.jesse.examination.question.redis.QuestionRedisService;
-import io.lettuce.core.RedisCommandTimeoutException;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.core.ReactiveHashOperations;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
-import org.springframework.data.redis.serializer.SerializationException;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
-import java.util.Comparator;
 import java.util.Map;
 import java.util.Objects;
-import java.util.TreeMap;
+import java.util.stream.Collectors;
 
-import static com.jesse.examination.core.redis.keys.ConcatRedisKey.allKeysOfUser;
+import static com.jesse.examination.core.redis.errorhandle.RedisGenericErrorHandle.genericErrorHandel;
 import static com.jesse.examination.core.redis.keys.ConcatRedisKey.correctTimesHashKey;
+import static java.lang.String.format;
 
 /** 问题数据统计 Redis 服务实现类。*/
 @Slf4j
@@ -55,97 +51,6 @@ public class QuestionRedisServiceImpl implements QuestionRedisService
         this.hashOperations = this.redisTemplate.opsForHash();
     }
 
-    private <T> @NotNull Mono<T>
-    genericErrorHandel(Throwable exception, T fallbackValue)
-    {
-        switch (exception)
-        {
-            case RedisConnectionFailureException redisConnectionFailureException ->
-                log.error(
-                    "Redis connect failed! Cause: {}",
-                    redisConnectionFailureException.toString()
-                );
-            case RedisCommandTimeoutException redisCommandTimeoutException ->
-                log.warn(
-                    "Redis operator time out! Cause: {}",
-                    redisCommandTimeoutException.toString()
-                );
-            case SerializationException serializationException ->
-                log.error(
-                    "Data deserialization failed! Cause: {}",
-                    serializationException.toString()
-                );
-            default ->
-                log.error(
-                    "Redis operator exception! Cause: {}",
-                    exception.toString()
-                );
-        }
-
-        return (fallbackValue != null) ? Mono.just(fallbackValue) : Mono.error(exception);
-    }
-
-    /**
-     * 某用户登录时，
-     * 将从该用户存档中读取所有问题答对次数数据以哈希表的形式存入 Redis。
-     *
-     * @param userName            用户名
-     * @param quesCorrectTimesMap 从 JSON 存档文件中读出，并映射后的哈希表，
-     *                            映射关系是：问题 ID -> 问题答对次数
-     * @return 是否成功存入 Redis?
-     */
-    @Override
-    public Mono<Boolean>
-    loadUserQuestionCorrectTimes(
-        String userName,
-        Map<String, Long> quesCorrectTimesMap
-    )
-    {
-        return this.hashOperations
-                   .putAll(
-                       correctTimesHashKey(userName),
-                       quesCorrectTimesMap)
-                   .timeout(Duration.ofSeconds(3L))
-                   .onErrorResume(
-                        (exception) ->
-                            this.genericErrorHandel(exception, false)
-                   );
-    }
-
-    /**
-     * 某用户登出时，
-     * 将从 Redis 中读取所有问题答对次数数据哈希表，再存回用户存档中。
-     *
-     * @param userName 用户名
-     *
-     * @return 从 Redis 中读取的所有问题答对次数数据哈希表
-     */
-    @Override
-    public Mono<Map<String, Long>>
-    getUserQuestionCorrectTimes(String userName)
-    {
-        return this.hashOperations
-                   .entries(correctTimesHashKey(userName))
-                   .timeout(Duration.ofSeconds(3L))
-                   .collectMap(Map.Entry::getKey, Map.Entry::getValue)
-                   .onErrorResume((exception) ->
-                       this.genericErrorHandel(exception, new TreeMap<>())
-                   )
-                   .map((unorderedMap) -> {
-                       /*
-                        * 由于 Redis 配置中键是按照 String 存储的，
-                        * 这里需要准备一个 TreeMap，把键转成整数再比较。
-                        */
-                       TreeMap<String, Long> sortedMap = new TreeMap<>(
-                           Comparator.comparing(Integer::parseInt)
-                       );
-
-                       sortedMap.putAll(unorderedMap);
-
-                       return sortedMap;
-                   });
-    }
-
     /**
      * 用户在练习时答对了一道题，这题的答对次数 + 1。
      *
@@ -155,37 +60,121 @@ public class QuestionRedisServiceImpl implements QuestionRedisService
      * @return 增加后该用户本题的答对次数
      */
     @Override
-    public Mono<Long> incrementUserQuestionCorrectTime(
+    public Mono<Long>
+    incrementUserQuestionCorrectTime(
         String userName, Long questionId
     )
     {
-        return this.hashOperations
-                   .increment(
-                        correctTimesHashKey(userName),
-                        String.valueOf(questionId), 1L
-                   )
-                  .timeout(Duration.ofSeconds(3L))
-                  .onErrorResume((exception) ->
-                      this.genericErrorHandel(exception, 0L)
-                  );
+        String key = correctTimesHashKey(userName);
+
+        return this.hashOperations.hasKey(key, String.valueOf(questionId))
+                   .flatMap(
+                       (isExist) ->
+                           (isExist)
+                               ? this.hashOperations
+                                     .increment(
+                                         key, String.valueOf(questionId), 1L
+                                     )
+                                    .timeout(Duration.ofSeconds(3L))
+                                    .onErrorResume((exception) ->
+                                        genericErrorHandel(exception, -1L)
+                                   )
+                               : genericErrorHandel(
+                                   new IllegalArgumentException(
+                                       format("Key: %s not exist!", key + ":" + questionId)
+                                   ),
+                                  null
+                           )
+                   );
     }
 
     /**
-     * 用户在登出且数据存回存档后，
-     * 需要删除他在 Redis 中的所有信息。
+     * 将某用户的某道问题的答对次数设为 value。
      *
-     * @param userName 用户名
+     * @param userName     用户名
+     * @param questionId   问题 ID
+     * @param specifiedVal 要设置的值
      *
-     * @return 是否成功从 Redis 中删除?
+     * @return 设置后该用户本题的答对次数
      */
     @Override
-    public Mono<Boolean> deleteUserInfo(String userName)
+    public Mono<Long>
+    setUserQuestionCorrectTime(
+        String userName, Long questionId, Long specifiedVal
+    )
     {
-        return this.redisTemplate
-                   .keys(allKeysOfUser(userName))
-                   .timeout(Duration.ofSeconds(3L))
-                   .flatMap(redisTemplate::delete)
-                   .then(Mono.just(true))
-                   .onErrorReturn(false);
+        String key = correctTimesHashKey(userName);
+
+        return this.hashOperations.hasKey(key, String.valueOf(questionId))
+                .flatMap((isExist) ->
+                    (!isExist)
+                        ? genericErrorHandel(
+                            new IllegalArgumentException(
+                                format("Key: %s not exist!", key + ":" + questionId)
+                            ), null)
+                        : this.hashOperations
+                              .put(key, String.valueOf(questionId), specifiedVal)
+                              .timeout(Duration.ofSeconds(3L))
+                        .flatMap((isSuccess) ->
+                            (isSuccess)
+                                ? Mono.just(specifiedVal)
+                                : Mono.just(-1L)
+                        ).onErrorResume((exception) ->
+                            genericErrorHandel(exception, -1L)
+                        )
+                );
+    }
+
+    /**
+     * <p>
+     *     将某用户所有问题的答对次数清空为 0。</br>
+     *     思路很简单，从 Redis 中获取键，
+     *     再把每个键的值设成 0L，把这一整个 Map 提交给 Redis。
+     * </p>
+     *
+     * @param userName  用户名
+     *
+     * @return 是否清空成功？
+     */
+    @Override
+    public Mono<Boolean>
+    clearUserQuestionCorrectTime(String userName)
+    {
+        String key = correctTimesHashKey(userName);
+
+        return this.redisTemplate.hasKey(key)
+                   .flatMap((isExist) ->
+                       (isExist)
+                           ? this.hashOperations
+                                 .keys(key)
+                                 .timeout(Duration.ofSeconds(3L))
+                                 .onErrorResume((exception) ->
+                                     genericErrorHandel(exception, null))
+                                 .collectList()
+                                 .flatMap((keys) ->
+                                 {
+                                     if (keys.isEmpty()) { return Mono.just(true); }
+
+                                     Map<String, Long> clearedMap
+                                         = keys.stream()
+                                               .collect(
+                                                   Collectors.toMap(
+                                                       k -> k, v -> 0L
+                                                   )
+                                               );
+
+                                     return this.hashOperations
+                                                .putAll(key, clearedMap)
+                                                .timeout(Duration.ofSeconds(3L))
+                                                .onErrorResume((exception) ->
+                                                    genericErrorHandel(exception, false)
+                                                );
+                               })
+                           : genericErrorHandel(
+                               new IllegalArgumentException(
+                                   format("Key: %s not exist!", key)
+                               ), null
+                       )
+                   );
     }
 }
