@@ -156,7 +156,7 @@ public class UserRedisServiceImpl implements UserRedisService
             );
     }
 
-    @Autowired
+    @Override
     public Flux<String> getAllUsers()
     {
         return this.redisTemplate.scan(
@@ -172,4 +172,8 @@ public class UserRedisServiceImpl implements UserRedisService
             }
         );
     }
+
+    @Override
+    public ReactiveRedisTemplate<String, Object>
+    getRedisTemplate() { return this.redisTemplate; }
 }
