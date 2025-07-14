@@ -27,7 +27,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static com.jesse.examination.core.email.utils.VarifyCodeGenerator.generateVarifyCode;
-import static com.jesse.examination.core.redis.keys.ConcatRedisKey.varifyCodeKey;
 import static com.jesse.examination.core.logmakers.LogMakers.REDIS_BASIC;
 
 /** Redis 基础操作测试。*/
@@ -96,12 +95,11 @@ public class RedisTest
         userVarifyCodes.put("Hans", generateVarifyCode(8).block());
         userVarifyCodes.put("John", generateVarifyCode(8).block());
 
-        userVarifyCodes.forEach((name, code) -> {
-            final String key = varifyCodeKey(name);
-
+        userVarifyCodes.forEach((name, code) ->
+        {
             Mono<Boolean> saveDataStream
                 = this.redisTemplate.opsForValue()
-                .set(key, code, Duration.of(5, ChronoUnit.SECONDS))
+                .set(name, code, Duration.ofSeconds(3L))
                 .doOnSuccess((ifSuccess) ->
                     log.info(
                         REDIS_BASIC,
