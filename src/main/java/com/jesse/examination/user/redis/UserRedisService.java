@@ -1,5 +1,6 @@
 package com.jesse.examination.user.redis;
 
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -49,4 +50,10 @@ public interface UserRedisService
      * @return 承载了所有用户名的 Flux
      */
     Flux<String>  getAllUsers();
+
+    /** 获取响应式 Redis 模板，
+     *  测试时用（生产环境拒绝这种破坏封装性的行为）。
+     */
+    ReactiveRedisTemplate<String, Object>
+    getRedisTemplate();
 }
