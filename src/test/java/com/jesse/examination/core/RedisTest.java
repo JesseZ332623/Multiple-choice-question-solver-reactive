@@ -1,8 +1,12 @@
 package com.jesse.examination.core;
 
+import io.lettuce.core.ClientOptions;
+import io.lettuce.core.SocketOptions;
+import io.lettuce.core.TimeoutOptions;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,6 +26,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 
+import static com.jesse.examination.core.email.utils.VarifyCodeGenerator.generateVarifyCode;
 import static com.jesse.examination.core.redis.keys.ConcatRedisKey.varifyCodeKey;
 import static com.jesse.examination.core.logmakers.LogMakers.REDIS_BASIC;
 
@@ -33,22 +38,42 @@ public class RedisTest
 {
     // 添加配置类提供连接工厂
     @Configuration
-    public static class RedisTestConfig {
+    public static class RedisTestConfig
+    {
+        @Value("${spring.data.redis.host}")
+        private String redisHost;
+
         @Bean
         public ReactiveRedisConnectionFactory reactiveRedisConnectionFactory()
         {
             // 1. 创建独立 Redis 配置
             RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
-            config.setHostName("192.168.31.104"); // Redis 地址
-            config.setPort(6379);                 // Redis 端口
+            config.setHostName(redisHost);  // Redis 地址
+            config.setPort(6379);           // Redis 端口
 
-            // 密码（空字符串表示无密码）
+            // 密码
             config.setPassword(RedisPassword.of("1234567890"));
 
-            // 2. 创建客户端配置（可选，设置超时等）
-            LettuceClientConfiguration clientConfig = LettuceClientConfiguration.builder()
-                .commandTimeout(Duration.ofSeconds(2))  // 命令超时时间
-                .build();
+            // 2. 创建客户端配置
+            LettuceClientConfiguration clientConfig
+                = LettuceClientConfiguration.builder()
+                    .clientOptions(
+                        ClientOptions.builder()
+                            .autoReconnect(true)
+                            .socketOptions(
+                                SocketOptions.builder()
+                                    .connectTimeout(Duration.ofSeconds(3L)) // 连接超时
+                                    .build()
+                            )
+                            .timeoutOptions(
+                                TimeoutOptions.builder()
+                                    .fixedTimeout(Duration.ofSeconds(3L)) // 操作超时
+                                    .build()
+                            ).build()
+                    )
+                    .commandTimeout(Duration.ofSeconds(3L))  // 命令超时时间
+                    .shutdownTimeout(Duration.ofSeconds(3L)) // 关闭超时时间
+                    .build();
 
             // 3. 创建连接工厂
             return new LettuceConnectionFactory(config, clientConfig);
@@ -63,13 +88,13 @@ public class RedisTest
     {
         Map<String, String> userVarifyCodes = new HashMap<>();
 
-        userVarifyCodes.put("Jesse", "123456");
-        userVarifyCodes.put("Tom", "123456");
-        userVarifyCodes.put("Mike", "123456");
-        userVarifyCodes.put("Lisa", "123456");
-        userVarifyCodes.put("Jerry", "123456");
-        userVarifyCodes.put("Hans", "123456");
-        userVarifyCodes.put("John", "123456");
+        userVarifyCodes.put("Jesse", generateVarifyCode(8).block());
+        userVarifyCodes.put("Tom", generateVarifyCode(8).block());
+        userVarifyCodes.put("Mike", generateVarifyCode(8).block());
+        userVarifyCodes.put("Lisa", generateVarifyCode(8).block());
+        userVarifyCodes.put("Jerry", generateVarifyCode(8).block());
+        userVarifyCodes.put("Hans", generateVarifyCode(8).block());
+        userVarifyCodes.put("John", generateVarifyCode(8).block());
 
         userVarifyCodes.forEach((name, code) -> {
             final String key = varifyCodeKey(name);
