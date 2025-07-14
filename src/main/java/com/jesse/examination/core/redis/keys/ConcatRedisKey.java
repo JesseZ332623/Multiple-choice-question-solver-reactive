@@ -44,7 +44,14 @@ public class ConcatRedisKey
         );
     }
 
-    /** 获取某个用户下所有键的 pattern */
+    /**
+     * <p>获取某个用户下所有键的通配符。</p>
+     *
+     * <p>
+     *     示例：
+     *     <code>user:Jesse:*</code>
+     * </p>
+     */
     public static String
     allKeysOfUser(String userName)
     {
@@ -52,6 +59,19 @@ public class ConcatRedisKey
             "%s:%s:*",
             USER_INFO_ROOT_KEY, userName
         );
+    }
+
+    /**
+     * <p>获取所有用户的通配符。</p>
+     *
+     * <p>
+     *     示例：
+     *     <code>user:*</code>
+     * </p>
+     */
+    public static String
+    allUserPatten() {
+        return USER_INFO_ROOT_KEY + ":*";
     }
 
     /* 陆续按需添加拼合方法。*/
