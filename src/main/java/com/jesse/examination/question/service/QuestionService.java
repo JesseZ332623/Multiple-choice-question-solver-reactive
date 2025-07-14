@@ -17,4 +17,16 @@ public interface QuestionService
     /** 分页查询问题和其正确答案。*/
     Mono<ServerResponse>
     getAllQuestionWithCorrectOption(ServerRequest request);
+
+    /** 用户在练习时答对了一道题，这题的答对次数 + 1。 */
+    Mono<ServerResponse>
+    incrementUserQuestionCorrectTime(ServerRequest request);
+
+    /** 将某用户的某道问题的答对次数设为 value。 */
+    Mono<ServerResponse>
+    setUserQuestionCorrectTime(ServerRequest request);
+
+    /** 将某用户所有问题的答对次数清空为 0。 */
+    Mono<ServerResponse>
+    clearUserQuestionCorrectTime(ServerRequest request);
 }
