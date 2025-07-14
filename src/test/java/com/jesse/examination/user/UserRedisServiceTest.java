@@ -2,10 +2,12 @@ package com.jesse.examination.user;
 
 import com.jesse.examination.question.repository.QuestionRepository;
 import com.jesse.examination.user.redis.UserRedisService;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -14,6 +16,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 
+import static com.jesse.examination.core.redis.keys.ConcatRedisKey.correctTimesHashKey;
+
+/** 用户模块 Redis 服务测试类。 */
 @Slf4j
 @SpringBootTest
 public class UserRedisServiceTest
@@ -24,11 +29,20 @@ public class UserRedisServiceTest
     @Autowired
     private QuestionRepository questionRepository;
 
-    ThreadLocalRandom random = ThreadLocalRandom.current();
+    ReactiveRedisTemplate<String, Object> redisTemplate;
+
+    @PostConstruct
+    private void getRedisTemplate()
+    {
+        this.redisTemplate
+            = this.userRedisService.getRedisTemplate();
+    }
 
     @Test
     void TestLoadUserQuestionCorrectTimes()
     {
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+
         Map<String, Long> quesCorrectTimesMap = new HashMap<>();
 
         long totalQuestionAmount
@@ -45,10 +59,29 @@ public class UserRedisServiceTest
         }
 
         Mono<Boolean> isOperatorSuccess
-            = this.userRedisService
-            .loadUserQuestionCorrectTimes(
-                "Jesse", quesCorrectTimesMap
-            );
+            = this.redisTemplate
+                  .hasKey(correctTimesHashKey("Jesse"))
+                  .flatMap((isExist) -> {
+                      if (!isExist)
+                      {
+                          return this.userRedisService
+                                     .loadUserQuestionCorrectTimes(
+                                         "Jesse", quesCorrectTimesMap
+                                     );
+                      }
+                      else
+                      {
+                          return this.redisTemplate.delete(
+                              correctTimesHashKey("Jesse")
+                          )
+                          .flatMap((ignore) ->
+                              this.userRedisService
+                                  .loadUserQuestionCorrectTimes(
+                                      "Jesse", quesCorrectTimesMap
+                                  )
+                          );
+                      }
+                  });
 
         StepVerifier.create(isOperatorSuccess)
             .expectNext(true).verifyComplete();
