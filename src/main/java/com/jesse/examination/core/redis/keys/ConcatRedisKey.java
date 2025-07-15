@@ -3,7 +3,7 @@ package com.jesse.examination.core.redis.keys;
 import static com.jesse.examination.core.redis.keys.ProjectRedisKey.*;
 import static java.lang.String.format;
 
-/** 拼合 Redis 键工具类。 */
+/** 拼合 Redis 键工具类。*/
 public class ConcatRedisKey
 {
     /**
@@ -11,7 +11,7 @@ public class ConcatRedisKey
      *
      * <p>
      *     示例：
-     *     <code>user:Jesse:ques_correct_times</code>
+     *     <code>user:Jesse:ques-correct-times</code>
      * </p>
      *
      */
@@ -30,7 +30,7 @@ public class ConcatRedisKey
      *
      * <p>
      *     示例：
-     *     <code>user:Jesse:varify_code</code>
+     *     <code>user:Jesse:varify-code</code>
      * </p>
      *
      */
@@ -53,7 +53,7 @@ public class ConcatRedisKey
      * </p>
      */
     public static String
-    allKeysOfUser(String userName)
+    allKeysOfUserPattern(String userName)
     {
         return format(
             "%s:%s:*",
