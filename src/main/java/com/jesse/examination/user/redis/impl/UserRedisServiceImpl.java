@@ -16,6 +16,7 @@ import java.util.*;
 
 import static com.jesse.examination.core.redis.errorhandle.RedisGenericErrorHandle.genericErrorHandel;
 import static com.jesse.examination.core.redis.keys.ConcatRedisKey.*;
+import static java.lang.String.format;
 
 /** 用户模块 Redis 服务实现类。*/
 @Slf4j
@@ -35,6 +36,87 @@ public class UserRedisServiceImpl implements UserRedisService
     {
         Objects.requireNonNull(this.redisTemplate);
         this.hashOperations = this.redisTemplate.opsForHash();
+    }
+
+    @Override
+    public Mono<Boolean>
+    saveUserVarifyCode(String userName, String varifyCode)
+    {
+        if (userName == null || userName.isEmpty())
+        {
+            return genericErrorHandel(
+                new IllegalArgumentException(
+                    "User name not be null or empty!"
+                ), null
+            );
+        }
+
+        if (varifyCode == null || varifyCode.isEmpty())
+        {
+            return genericErrorHandel(
+                new IllegalArgumentException(
+                    "Varify code name not be null or empty!"
+                ), null
+            );
+        }
+
+        String varifyCodeKey = varifyCodeKey(userName);
+
+        return this.redisTemplate.hasKey(varifyCodeKey)
+                   .flatMap((isExist) ->
+                       (!isExist)
+                        ? this.redisTemplate.opsForValue()
+                              .set(varifyCodeKey, varifyCode)
+                              .timeout(Duration.ofSeconds(3L))
+                              .onErrorResume((exception) ->
+                                  genericErrorHandel(exception, null)
+                              )
+                        : this.redisTemplate.delete(varifyCodeKey)
+                              .timeout(Duration.ofSeconds(3L))
+                              .onErrorResume((exception) ->
+                                  genericErrorHandel(exception, null)
+                              )
+                              .flatMap((ignore) ->
+                                  this.redisTemplate.opsForValue()
+                                      .set(varifyCodeKey, varifyCode)
+                                      .timeout(Duration.ofSeconds(3L))
+                                      .onErrorResume((exception) ->
+                                          genericErrorHandel(exception, null)
+                                      )
+                              )
+                  );
+    }
+
+    @Override
+    public Mono<String>
+    getUserVarifyCode(String userName)
+    {
+        if (userName == null || userName.isEmpty())
+        {
+            return genericErrorHandel(
+                new IllegalArgumentException(
+                    "User name not be null or empty!"
+                ), null
+            );
+        }
+
+        String varifyCodeKey = varifyCodeKey(userName);
+
+        return this.redisTemplate.hasKey(varifyCodeKey)
+                    .timeout(Duration.ofSeconds(3L))
+                    .onErrorResume((exception) ->
+                        genericErrorHandel(exception, null))
+                    .flatMap((isExist) ->
+                       (!isExist)
+                        ? genericErrorHandel(
+                            new IllegalArgumentException(), null)
+                        : this.redisTemplate.opsForValue()
+                              .get(varifyCodeKey)
+                              .map((res) -> (String) res)
+                              .timeout(Duration.ofSeconds(3L))
+                              .onErrorResume((exception) ->
+                                  genericErrorHandel(exception, null))
+                   );
     }
 
     /**
@@ -88,6 +170,8 @@ public class UserRedisServiceImpl implements UserRedisService
      *
      * @param userName 用户名
      *
+     * @throws IllegalArgumentException 用户名对应的 key 不存在时抛出
+     *
      * @return 从 Redis 中读取的所有问题答对次数数据哈希表
      */
     @Override
@@ -103,31 +187,46 @@ public class UserRedisServiceImpl implements UserRedisService
             );
         }
 
-        return this.hashOperations
-            .entries(correctTimesHashKey(userName))
-            .timeout(Duration.ofSeconds(3L))
-            .collectMap(Map.Entry::getKey, Map.Entry::getValue)
-            .onErrorResume((exception) ->
-                genericErrorHandel(exception, new TreeMap<>())
-            )
-            .map((unorderedMap) -> {
-                /*
-                 * 由于 Redis 配置中键是按照 String 存储的，
-                 * 这里需要准备一个 TreeMap，把键转成整数再比较。
-                 */
-                TreeMap<String, Long> sortedMap = new TreeMap<>(
-                    Comparator.comparing(Integer::parseInt)
-                );
+        String key = correctTimesHashKey(userName);
 
-                sortedMap.putAll(unorderedMap);
+        return this.redisTemplate.hasKey(key)
+                   .flatMap((isExist) ->
+                       (isExist)
+                       ? this.hashOperations.entries(correctTimesHashKey(userName))
+                             .timeout(Duration.ofSeconds(3L))
+                             .collectMap(Map.Entry::getKey, Map.Entry::getValue)
+                             .onErrorResume((exception) ->
+                                 genericErrorHandel(exception, new TreeMap<>())
+                             )
+                             .map((unorderedMap) -> {
+                                /*
+                                 * 由于 Redis 配置中键是按照 String 存储的，
+                                 * 这里需要准备一个 TreeMap，把键转成整数再比较。
+                                 */
+                                 TreeMap<String, Long> sortedMap = new TreeMap<>(
+                                     Comparator.comparing(Integer::parseInt)
+                                 );
 
-                return sortedMap;
-            });
+                                 sortedMap.putAll(unorderedMap);
+
+                                 return sortedMap;
+                           }).flatMap((sortedMap) ->
+                                this.redisTemplate.delete(key)
+                                    .timeout(Duration.ofSeconds(3L))
+                                    .onErrorResume((exception) ->
+                                        genericErrorHandel(exception, -1L)
+                                    )
+                                    .thenReturn(sortedMap)
+                           )
+                       : genericErrorHandel(
+                           new IllegalArgumentException(format("Key: %s is not exist!", key)),
+                           null
+                       )
+                   );
     }
 
     /**
-     * 用户在登出且数据存回存档后，
-     * 需要删除他在 Redis 中的所有信息。
+     * 将某个用户下的所有数据删除。
      *
      * @param userName 用户名
      *
@@ -146,14 +245,23 @@ public class UserRedisServiceImpl implements UserRedisService
             );
         }
 
-        return this.redisTemplate
-            .keys(allKeysOfUser(userName))
+        return this.redisTemplate.scan(
+            ScanOptions.scanOptions()
+                       .match(allKeysOfUserPattern(userName))
+                       .build()
+            )
             .timeout(Duration.ofSeconds(3L))
-            .flatMap(redisTemplate::delete)
-            .then(Mono.just(true))
             .onErrorResume((exception) ->
-                genericErrorHandel(exception, false)
-            );
+                genericErrorHandel(exception, null)
+            )
+            .flatMap((key) ->
+                this.redisTemplate.delete(key)
+                    .timeout(Duration.ofSeconds(3L))
+                    .onErrorResume((exception) ->
+                        genericErrorHandel(exception, null)
+                    )
+            )
+            .then(Mono.just(true));
     }
 
     @Override
@@ -161,7 +269,12 @@ public class UserRedisServiceImpl implements UserRedisService
     {
         return this.redisTemplate.scan(
             ScanOptions.scanOptions()
-                .match(allUserPatten()).build()
+                       .match(allUserPatten())
+                       .build()
+        )
+        .timeout(Duration.ofSeconds(3L))
+        .onErrorResume((exception) ->
+            genericErrorHandel(exception, null)
         )
         .map((key) -> {
                 String[] subStr = key.split(":");
@@ -172,8 +285,4 @@ public class UserRedisServiceImpl implements UserRedisService
             }
         );
     }
-
-    @Override
-    public ReactiveRedisTemplate<String, Object>
-    getRedisTemplate() { return this.redisTemplate; }
 }
