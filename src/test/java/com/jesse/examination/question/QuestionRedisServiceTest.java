@@ -47,11 +47,14 @@ public class QuestionRedisServiceTest
                             log.info("Key: {}", correctTimesHashKey(user) + ":" + radomQuestionId);
 
                             return this.questionRedisService
-                                .incrementUserQuestionCorrectTime(
-                                    user, radomQuestionId
-                                );
+                                       .incrementUserQuestionCorrectTime(
+                                           user, radomQuestionId
+                                       );
                         });
-                }).doOnError((e) -> log.error(e.getMessage())).collectList().block();
+                }).doOnError(
+                    (e) ->
+                        log.error(e.getMessage())
+                ).collectList().block();
 
         assert result != null;
         result.forEach(count -> log.info("Count: {}", count));
