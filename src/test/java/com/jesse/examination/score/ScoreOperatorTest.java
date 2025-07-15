@@ -59,7 +59,7 @@ public class ScoreOperatorTest
         /* 生成总数据量。*/
         final int INSERT_AMOUNT = 500000;
         final int BUFFER_SIZE   = 10000;
-        final int PARALLELISM   = 16;    // 根据 DB 连接池调整并发度
+        final int PARALLELISM   = 32;    // 根据 DB 连接池调整并发度
 
         /*
          * 设计并行计划：
