@@ -6,6 +6,7 @@ import io.lettuce.core.TimeoutOptions;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.connection.ReactiveRedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisPassword;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
@@ -33,7 +34,9 @@ public class ReactiveRedisConfig
 
     /** Redis 响应式连接工厂配置类。 */
     @Bean
-    public ReactiveRedisConnectionFactory reactiveRedisConnectionFactory()
+    @Primary
+    public ReactiveRedisConnectionFactory
+    reactiveRedisConnectionFactory()
     {
         // 1. 创建独立 Redis 配置
         RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
