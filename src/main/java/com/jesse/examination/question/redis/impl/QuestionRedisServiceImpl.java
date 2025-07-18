@@ -47,8 +47,9 @@ public class QuestionRedisServiceImpl implements QuestionRedisService
     @PostConstruct
     private void setHashOperator()
     {
-        Objects.requireNonNull(this.redisTemplate);
-        this.hashOperations = this.redisTemplate.opsForHash();
+        this.hashOperations
+            = Objects.requireNonNull(this.redisTemplate)
+                     .opsForHash();
     }
 
     /**
@@ -82,8 +83,7 @@ public class QuestionRedisServiceImpl implements QuestionRedisService
                                : genericErrorHandel(
                                    new IllegalArgumentException(
                                        format("Key: %s not exist!", key + ":" + questionId)
-                                   ),
-                                  null
+                                   ), null
                            )
                    );
     }
