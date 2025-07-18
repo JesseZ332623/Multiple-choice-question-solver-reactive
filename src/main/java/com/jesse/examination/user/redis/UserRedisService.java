@@ -53,9 +53,7 @@ public interface UserRedisService
     );
 
     /**
-     * <p>
-     *     读取指定用户的验证码。
-     * </p>
+     * <p>读取指定用户的验证码。</p>
      *
      * <code><pre>
      * [Key]    user:[userName]:varify-code
