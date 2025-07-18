@@ -18,6 +18,15 @@ public interface FileTransferService
     saveTextFile(Path filePath, String fileName, String fileData);
 
     /**
+     * 文本文件存储读取方法（响应式）。
+     *
+     * @param filePath 文件路径
+     * @param fileName 文件名
+     */
+    Mono<String>
+    readTextFile(Path filePath, String fileName);
+
+    /**
      * 非文本文件存储通用方法（响应式）。
      *
      * @param filePath 文件路径
@@ -26,6 +35,10 @@ public interface FileTransferService
      */
     Mono<Void>
     saveDataFile(Path filePath, String fileName, byte[] fileData);
+
+    /**删除指定文件方法（响应式）。*/
+    Mono<Void>
+    deleteFile(Path filePath, String fileName);
 
     /**
      * 重命名路径（响应式）。
