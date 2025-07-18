@@ -1,8 +1,13 @@
 package com.jesse.examination.score;
 
+import com.jesse.examination.core.exception.ResourceNotFoundException;
 import com.jesse.examination.score.entity.ScoreRecord;
 import com.jesse.examination.score.repository.ScoreRecordRepository;
+import com.jesse.examination.user.repository.UserRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -13,6 +18,7 @@ import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -26,34 +32,55 @@ public class ScoreOperatorTest
     @Autowired
     private ScoreRecordRepository scoreRecordRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
     private final ThreadLocalRandom random
         = ThreadLocalRandom.current();
 
-    private ScoreRecord
+    private List<Long> allIdsList;
+
+    @PostConstruct
+    void cacheAllIdsList()
+    {
+        allIdsList =
+            this.userRepository.findAllIds()
+                .collectList().block();
+    }
+
+    @Contract(" -> new")
+    private @NotNull ScoreRecord
     produceOneScoreRecord()
     {
+        if (allIdsList.isEmpty())
+        {
+            throw new ResourceNotFoundException(
+                "No users exist! Can't produce score record!"
+            );
+        }
+
         return new ScoreRecord(
-                random.nextLong(1, 4),
-                randomBetween(
-                    LocalDateTime.of(
-                        2020, 1, 1,
-                        0, 0, 0
+                    allIdsList.get(random.nextInt(0, allIdsList.size())),
+                    randomBetween(
+                        LocalDateTime.of(
+                            2015, 1, 1,
+                            0, 0, 0
+                        ),
+                        LocalDateTime.now()
                     ),
-                    LocalDateTime.now()
-                ),
-                random.nextInt(1, 30),
-                random.nextInt(1, 30),
-                random.nextInt(1, 30)
-        );
+                    random.nextInt(1, 30),
+                    random.nextInt(1, 30),
+                    random.nextInt(1, 30)
+                );
     }
 
     @Test
     public void TestNewScoreGenerate()
     {
         // 若数据表中有数据了，这个测试用例就不要运行。
-        if (Objects.requireNonNull(
+        if (!Objects.requireNonNull(
             this.scoreRecordRepository
-                .count().block()).compareTo(0L) > 0
+                .count().block()).equals(0L)
         ) { return; }
 
         /* 生成总数据量。*/
