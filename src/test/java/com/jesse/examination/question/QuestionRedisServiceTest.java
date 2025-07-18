@@ -7,6 +7,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
@@ -32,7 +34,7 @@ public class QuestionRedisServiceTest
     {
         ThreadLocalRandom random = ThreadLocalRandom.current();
 
-        List<Long> result
+        Mono<List<Long>> incrUserQuestionCorrectTime
             = this.userRedisService.getAllUsers()
                 .flatMap((user) ->
                 {
@@ -41,22 +43,22 @@ public class QuestionRedisServiceTest
                     return this.questionRepository.count()
                         .flatMap((totalItems) ->
                         {
-                            long radomQuestionId
-                                = random.nextLong(1, totalItems);
+                            long radomQuestionId = random.nextLong(1, totalItems);
 
-                            log.info("Key: {}", correctTimesHashKey(user) + ":" + radomQuestionId);
+                            log.info(
+                                "Key: {}",
+                                correctTimesHashKey(user) + ":" + radomQuestionId
+                            );
 
                             return this.questionRedisService
-                                       .incrementUserQuestionCorrectTime(
-                                           user, radomQuestionId
-                                       );
+                                       .incrementUserQuestionCorrectTime(user, radomQuestionId);
                         });
                 }).doOnError(
-                    (e) ->
-                        log.error(e.getMessage())
-                ).collectList().block();
+                    (e) -> log.error(e.getMessage())
+                ).collectList();
 
-        assert result != null;
-        result.forEach(count -> log.info("Count: {}", count));
+        StepVerifier.create(incrUserQuestionCorrectTime)
+            .consumeNextWith(System.out::println)
+            .verifyComplete();
     }
 }
