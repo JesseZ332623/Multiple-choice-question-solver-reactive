@@ -1,11 +1,14 @@
 package com.jesse.examination.core.properties;
 
-import lombok.Data;
+import jakarta.annotation.PostConstruct;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /** 从 application.properties 配置文件中读取的部分属性信息。 */
-@Data
+@Slf4j
+@Getter
 @Component
 public class ProjectProperties
 {
@@ -14,6 +17,22 @@ public class ProjectProperties
 
     @Value("${server.port}")
     private String serverPort;
+
+    @Value("${file.upload.default-avatar-dir}")
+    private String defaultAvatarPath;
+
+    @Value("${file.upload-dir}")
+    private String userArchivePath;
+
+    @PostConstruct
+    void showAllProperties()
+    {
+        log.info(
+            "\n{}\n{}\n{}\n{}\n",
+            serverAddress, serverPort,
+            defaultAvatarPath, userArchivePath
+        );
+    }
 
     /**
      * 获取本服务器根 URL，示例如下：</br>
