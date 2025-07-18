@@ -204,7 +204,7 @@ public class UserRedisServiceImpl implements UserRedisService
                                  * 这里需要准备一个 TreeMap，把键转成整数再比较。
                                  */
                                  TreeMap<String, Long> sortedMap = new TreeMap<>(
-                                     Comparator.comparing(Integer::parseInt)
+                                     Comparator.comparing(Long::parseLong)
                                  );
 
                                  sortedMap.putAll(unorderedMap);
