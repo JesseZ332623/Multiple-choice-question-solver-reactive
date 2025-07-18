@@ -7,7 +7,9 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -52,13 +54,15 @@ public class FileTransferServiceImpl implements FileTransferService
     public Mono<Void> saveTextFile(
         Path filePath, String fileName, String fileData)
     {
-        Objects.requireNonNull(filePath, "File path cannot be null");
-        Objects.requireNonNull(fileName, "File name cannot be null");
+        Objects.requireNonNull(filePath, "File path cannot be null!");
+        Objects.requireNonNull(fileName, "File name cannot be null!");
 
         return Mono.fromCallable(
             () -> {
                 Path fullPath
                     = prepareDirectory(filePath).resolve(fileName).normalize();
+
+                log.info("[saveTextFile()] Full path: {}", fullPath);
 
                 Files.writeString(
                     fullPath, fileData,
@@ -67,49 +71,49 @@ public class FileTransferServiceImpl implements FileTransferService
                 );
 
                 return null;
-            }
-        ).subscribeOn(Schedulers.boundedElastic())
-        .doOnError((exception) ->
-             log.error(
-                 "[saveTextFile()] Save {} file: {} failed!",
-                 fileName,
-                 getFileExtension(fileName),
-                 exception
-             )
-        )
-        .onErrorResume((exception) ->
-            Mono.error(new FileOperatorException(
-                format(
-                    ERROR_MESSAGE_TEMPLATE,
-                    fileName, exception.getMessage()
-                ), exception
-        ))).then();
+            })
+            .subscribeOn(Schedulers.boundedElastic())
+            .doOnError((exception) ->
+                 log.error(
+                     "[saveTextFile()] Save {} file: {} failed!",
+                     fileName,
+                     getFileExtension(fileName),
+                     exception
+                 )
+            )
+            .onErrorResume((exception) ->
+                Mono.error(new FileOperatorException(
+                    format(
+                        ERROR_MESSAGE_TEMPLATE,
+                        fileName, exception.getMessage()
+                    ), exception
+            ))).then();
     }
 
     @Override
-    public Mono<Void> saveDataFile(
-        Path filePath, String fileName, byte[] fileData)
+    public Mono<String>
+    readTextFile(Path filePath, String fileName)
     {
-        Objects.requireNonNull(filePath, "File path cannot be null");
-        Objects.requireNonNull(fileName, "File name cannot be null");
+        Objects.requireNonNull(filePath, "File path cannot be null!");
+        Objects.requireNonNull(fileName, "File name cannot be null!");
 
         return Mono.fromCallable(
             () -> {
                 Path fullPath
                     = prepareDirectory(filePath).resolve(fileName).normalize();
 
-                Files.write(
-                    fullPath, fileData,
-                    StandardOpenOption.CREATE,             // 不存在则创建
-                    StandardOpenOption.TRUNCATE_EXISTING   // 存在则清空
-                );
+                if (!Files.exists(fullPath)) {
+                    throw new FileNotFoundException(
+                        format("File %s not exist!", fullPath)
+                    );
+                }
 
-                return null;
-            }
-        ).subscribeOn(Schedulers.boundedElastic())
+                return Files.readString(fullPath, StandardCharsets.UTF_8);
+            })
+            .subscribeOn(Schedulers.boundedElastic())
             .doOnError((exception) ->
-            log.error(
-                    "Save {} file: {} failed!",
+                log.error(
+                    "[readTextFile()] Read {} file: {} failed!",
                     fileName,
                     getFileExtension(fileName),
                     exception
@@ -120,23 +124,108 @@ public class FileTransferServiceImpl implements FileTransferService
                     format(
                         ERROR_MESSAGE_TEMPLATE,
                         fileName, exception.getMessage()
-                    ), exception
-                ))).then();
+                    ), exception)
+                )
+            );
+    }
+
+    @Override
+    public Mono<Void> saveDataFile(
+        Path filePath, String fileName, byte[] fileData)
+    {
+        Objects.requireNonNull(filePath, "File path cannot be null!");
+        Objects.requireNonNull(fileName, "File name cannot be null!");
+
+        return Mono.fromCallable(
+            () -> {
+                Path fullPath
+                    = prepareDirectory(filePath).resolve(fileName).normalize();
+
+                log.info("[saveDataFile()] Full path: {}", fullPath);
+
+                Files.write(
+                    fullPath, fileData,
+                    StandardOpenOption.CREATE,             // 不存在则创建
+                    StandardOpenOption.TRUNCATE_EXISTING   // 存在则清空
+                );
+
+                return null;
+            })
+        .subscribeOn(Schedulers.boundedElastic())
+        .doOnError((exception) ->
+            log.error(
+                    "[saveDataFile()] Save {} file: {} failed!",
+                    fileName,
+                    getFileExtension(fileName),
+                    exception
+                )
+            )
+        .onErrorResume((exception) ->
+            Mono.error(new FileOperatorException(
+                format(
+                    ERROR_MESSAGE_TEMPLATE,
+                    fileName, exception.getMessage()
+                ), exception)
+            )
+        ).then();
+    }
+
+    @Override
+    public Mono<Void>
+    deleteFile(Path filePath, String fileName)
+    {
+        Objects.requireNonNull(filePath, "File path cannot be null!");
+        Objects.requireNonNull(fileName, "File name cannot be null!");
+
+        return Mono.fromCallable(() -> {
+            Path pullPath
+                = prepareDirectory(filePath).resolve(fileName).normalize();
+
+            if (!Files.deleteIfExists(pullPath))
+            {
+                throw new FileNotFoundException(
+                    format(
+                            "[deleteFile()] File path: %s not exist!",
+                            filePath
+                    )
+                );
+            }
+
+                return null;
+            }
+        )
+        .subscribeOn(Schedulers.boundedElastic())
+        .doOnError((exception) ->
+                log.error(
+                    "[deleteFile()] Delete {} file: {} failed!",
+                    fileName,
+                    getFileExtension(fileName),
+                    exception
+                )
+            )
+        .onErrorResume((exception) ->
+            Mono.error(new FileOperatorException(
+                format(
+                    ERROR_MESSAGE_TEMPLATE,
+                    fileName, exception.getMessage()
+                ), exception)
+            )
+        ).then();
     }
 
     @Override
     public Mono<Void>
     renameDirectory(Path oldPathName, Path newPathName)
     {
-        Objects.requireNonNull(oldPathName, "Old file path path cannot be null");
-        Objects.requireNonNull(newPathName, "New file path name cannot be null");
+        Objects.requireNonNull(oldPathName, "Old file path path cannot be null!");
+        Objects.requireNonNull(newPathName, "New file path name cannot be null!");
 
         return Mono.fromCallable(
             () -> {
                 if (!Files.exists(oldPathName))
                 {
                     throw new IllegalArgumentException(
-                        format("source path: %s not exist!", oldPathName)
+                        format("renameDirectory(): source path: %s not exist!", oldPathName)
                     );
                 }
 
@@ -164,8 +253,8 @@ public class FileTransferServiceImpl implements FileTransferService
                 );
 
                 return null;
-            }
-        ).subscribeOn(Schedulers.boundedElastic())
+            })
+        .subscribeOn(Schedulers.boundedElastic())
         .doOnError((exception) ->
             log.error(
             "Rename directory {} -> {} failed!",
@@ -179,7 +268,8 @@ public class FileTransferServiceImpl implements FileTransferService
                         format("%s -> %s", oldPathName, newPathName),
                         exception.getMessage()
                     ), exception
+                )
             )
-        )).then();
+        ).then();
     }
 }
