@@ -1,9 +1,11 @@
 package com.jesse.examination.core;
 
 import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.redis.connection.RedisServerCommands;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.test.context.ContextConfiguration;
 import reactor.core.publisher.Mono;
@@ -25,6 +27,17 @@ public class RedisTest
 {
     @Autowired
     private ReactiveRedisTemplate<String, Object> redisTemplate;
+
+    /** 测试类执行完毕后清理 Redis。 */
+    @AfterEach
+    public void cleanRedis()
+    {
+        this.redisTemplate.getConnectionFactory()
+            .getReactiveConnection()
+            .serverCommands()
+            .flushAll(RedisServerCommands.FlushOption.ASYNC)
+            .block();
+    }
 
     @Test
     public void RedisBasicTest()
