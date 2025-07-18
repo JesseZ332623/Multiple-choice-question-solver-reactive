@@ -7,9 +7,7 @@ import org.springframework.data.relational.core.mapping.Table;
 
 import java.time.LocalDateTime;
 
-/**
- * 用户实体类。
- */
+/** 用户实体类。*/
 @Data
 @Table(name = "users")
 @NoArgsConstructor
