@@ -5,7 +5,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.Map;
 
-/** 用户模块 Redis 服务接口类。 */
+/** 用户模块 Redis 服务接口类。*/
 public interface UserRedisService
 {
     /**
@@ -26,6 +26,10 @@ public interface UserRedisService
      */
     Mono<Boolean>
     saveUserVarifyCode(String userName, String varifyCode);
+
+    /** 当用户登录的验证码匹配时，删除 Redis 中对应的验证码。*/
+    Mono<Boolean>
+    deleteUserVarifyCode(String userName);
 
     /**
      * <p>
