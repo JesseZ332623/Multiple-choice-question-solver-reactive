@@ -27,11 +27,15 @@ public interface UserService
     Mono<ServerResponse>
     deleteUser(ServerRequest request);
 
+    /** 向指定用户发出一封验证码邮件。*/
+    Mono<ServerResponse>
+    sendVarifyCodeEmail(ServerRequest request);
+
     /** 通过用户名获取用户头像数据。 */
     Mono<ServerResponse>
     getUserAvatarImage(ServerRequest request);
 
     /** 设置指定用户的头像数据。*/
     Mono<ServerResponse>
-    setUserAvatar(ServerRequest request);
+    setUserAvatarImage(ServerRequest request);
 }
