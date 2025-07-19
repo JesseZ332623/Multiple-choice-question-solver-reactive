@@ -19,7 +19,7 @@ import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static com.jesse.examination.core.email.utils.VarifyCodeGenerator.generateVarifyCode;
-import static com.jesse.examination.core.redis.errorhandle.RedisGenericErrorHandle.genericErrorHandel;
+import static com.jesse.examination.core.redis.errorhandle.RedisGenericErrorHandle.redisGenericErrorHandel;
 import static com.jesse.examination.core.redis.keys.ConcatRedisKey.correctTimesHashKey;
 import static com.jesse.examination.core.redis.keys.ConcatRedisKey.varifyCodeKey;
 
@@ -82,7 +82,7 @@ public class UserRedisServiceTest
                                  .delete(correctTimesHashKey(user))
                                  .timeout(Duration.ofSeconds(3L))
                                  .onErrorResume((exception) ->
-                                     genericErrorHandel(exception, null)
+                                     redisGenericErrorHandel(exception, null)
                                  )
                                  .then(
                                      this.userRedisService
@@ -100,7 +100,7 @@ public class UserRedisServiceTest
                                             .delete(varifyCodeKey(user))
                                             .timeout(Duration.ofSeconds(3L))
                                             .onErrorResume((exception) ->
-                                                genericErrorHandel(exception, null)
+                                                redisGenericErrorHandel(exception, null)
                                             )
                                             .then(
                                                 this.userRedisService
