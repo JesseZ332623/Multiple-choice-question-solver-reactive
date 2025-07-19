@@ -2,6 +2,7 @@ package com.jesse.examination.core.properties;
 
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
+import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Getter
 @Component
+@ToString
 public class ProjectProperties
 {
     @Value("${server.address}")
@@ -24,14 +26,21 @@ public class ProjectProperties
     @Value("${file.upload-dir}")
     private String userArchivePath;
 
+    @Value("${jwt.secret-key}")
+    private String jwtSecretKey;
+
+    @Value("${jwt.expiration}")
+    private String jwtExpiration;
+
+    @Value("${app.redis.varify-code-expiration}")
+    private String varifyCodeExpiration;
+
+    @Value("${app.varify-code-length}")
+    private String varifyCodeLength;
+
     @PostConstruct
-    void showAllProperties()
-    {
-        log.info(
-            "\n{}\n{}\n{}\n{}\n",
-            serverAddress, serverPort,
-            defaultAvatarPath, userArchivePath
-        );
+    void showAllProperties() {
+        log.info(this.toString());
     }
 
     /**
