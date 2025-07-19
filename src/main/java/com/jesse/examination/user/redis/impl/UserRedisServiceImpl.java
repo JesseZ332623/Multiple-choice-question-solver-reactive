@@ -1,5 +1,6 @@
 package com.jesse.examination.user.redis.impl;
 
+import com.jesse.examination.core.properties.ProjectProperties;
 import com.jesse.examination.user.redis.UserRedisService;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -14,7 +15,7 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.util.*;
 
-import static com.jesse.examination.core.redis.errorhandle.RedisGenericErrorHandle.genericErrorHandel;
+import static com.jesse.examination.core.redis.errorhandle.RedisGenericErrorHandle.redisGenericErrorHandel;
 import static com.jesse.examination.core.redis.keys.ConcatRedisKey.*;
 import static java.lang.String.format;
 
@@ -26,6 +27,9 @@ public class UserRedisServiceImpl implements UserRedisService
     /** 响应式 Redis 模板。*/
     @Autowired
     private ReactiveRedisTemplate<String, Object> redisTemplate;
+
+    @Autowired
+    private ProjectProperties projectProperties;
 
     private
     ReactiveHashOperations<String, String, Long> hashOperations;
@@ -44,7 +48,7 @@ public class UserRedisServiceImpl implements UserRedisService
     {
         if (userName == null || userName.isEmpty())
         {
-            return genericErrorHandel(
+            return redisGenericErrorHandel(
                 new IllegalArgumentException(
                     "User name not be null or empty!"
                 ), null
@@ -53,7 +57,7 @@ public class UserRedisServiceImpl implements UserRedisService
 
         if (varifyCode == null || varifyCode.isEmpty())
         {
-            return genericErrorHandel(
+            return redisGenericErrorHandel(
                 new IllegalArgumentException(
                     "Varify code name not be null or empty!"
                 ), null
@@ -66,25 +70,64 @@ public class UserRedisServiceImpl implements UserRedisService
                    .flatMap((isExist) ->
                        (!isExist)
                         ? this.redisTemplate.opsForValue()
-                              .set(varifyCodeKey, varifyCode)
+                              .set(
+                                  varifyCodeKey, varifyCode,
+                                  Duration.ofSeconds(
+                                      Long.parseLong(projectProperties.getVarifyCodeExpiration())
+                                  )
+                              )
                               .timeout(Duration.ofSeconds(3L))
                               .onErrorResume((exception) ->
-                                  genericErrorHandel(exception, null)
+                                  redisGenericErrorHandel(exception, null)
                               )
                         : this.redisTemplate.delete(varifyCodeKey)
                               .timeout(Duration.ofSeconds(3L))
                               .onErrorResume((exception) ->
-                                  genericErrorHandel(exception, null)
+                                  redisGenericErrorHandel(exception, null)
                               )
                               .flatMap((ignore) ->
                                   this.redisTemplate.opsForValue()
                                       .set(varifyCodeKey, varifyCode)
                                       .timeout(Duration.ofSeconds(3L))
                                       .onErrorResume((exception) ->
-                                          genericErrorHandel(exception, null)
+                                          redisGenericErrorHandel(exception, null)
                                       )
                               )
                   );
+    }
+
+    @Override
+    public Mono<Boolean>
+    deleteUserVarifyCode(String userName)
+    {
+        if (userName == null || userName.isEmpty())
+        {
+            return redisGenericErrorHandel(
+                new IllegalArgumentException(
+                    "User name not be null or empty!"
+                ), null
+            );
+        }
+
+        String varifyCodeKey = varifyCodeKey(userName);
+
+        return this.redisTemplate.hasKey(varifyCodeKey)
+            .flatMap((isExist) ->
+                (isExist)
+                    ? this.redisTemplate.opsForValue()
+                          .delete(varifyCodeKey)
+                          .timeout(Duration.ofSeconds(3L))
+                          .onErrorResume((exception) ->
+                              redisGenericErrorHandel(exception, null)
+                          )
+                    : redisGenericErrorHandel(
+                        new IllegalArgumentException(
+                        format(
+                            "Deltete varidy code for %s failed! Cause: Key: %s not exist!",
+                            userName, varifyCodeKey)
+                        ), null
+                )
+            );
     }
 
     @Override
@@ -93,7 +136,7 @@ public class UserRedisServiceImpl implements UserRedisService
     {
         if (userName == null || userName.isEmpty())
         {
-            return genericErrorHandel(
+            return redisGenericErrorHandel(
                 new IllegalArgumentException(
                     "User name not be null or empty!"
                 ), null
@@ -105,17 +148,17 @@ public class UserRedisServiceImpl implements UserRedisService
         return this.redisTemplate.hasKey(varifyCodeKey)
                     .timeout(Duration.ofSeconds(3L))
                     .onErrorResume((exception) ->
-                        genericErrorHandel(exception, null))
+                        redisGenericErrorHandel(exception, null))
                     .flatMap((isExist) ->
                        (!isExist)
-                        ? genericErrorHandel(
+                        ? redisGenericErrorHandel(
                             new IllegalArgumentException(), null)
                         : this.redisTemplate.opsForValue()
                               .get(varifyCodeKey)
                               .map((res) -> (String) res)
                               .timeout(Duration.ofSeconds(3L))
                               .onErrorResume((exception) ->
-                                  genericErrorHandel(exception, null))
+                                  redisGenericErrorHandel(exception, null))
                    );
     }
 
@@ -137,7 +180,7 @@ public class UserRedisServiceImpl implements UserRedisService
     {
         if (userName == null || userName.isEmpty())
         {
-            return genericErrorHandel(
+            return redisGenericErrorHandel(
                 new IllegalArgumentException(
                     "User name not be null or empty!"
                 ), null
@@ -146,7 +189,7 @@ public class UserRedisServiceImpl implements UserRedisService
 
         if (quesCorrectTimesMap == null || quesCorrectTimesMap.isEmpty())
         {
-            return genericErrorHandel(
+            return redisGenericErrorHandel(
                 new IllegalArgumentException(
                     "Question Correct TimesMap not be null or empty!"
                 ), null
@@ -160,7 +203,7 @@ public class UserRedisServiceImpl implements UserRedisService
             .timeout(Duration.ofSeconds(3L))
             .onErrorResume(
                 (exception) ->
-                    genericErrorHandel(exception, false)
+                    redisGenericErrorHandel(exception, false)
             );
     }
 
@@ -180,7 +223,7 @@ public class UserRedisServiceImpl implements UserRedisService
     {
         if (userName == null || userName.isEmpty())
         {
-            return genericErrorHandel(
+            return redisGenericErrorHandel(
                 new IllegalArgumentException(
                     "User name not be null or empty!"
                 ), null
@@ -196,7 +239,7 @@ public class UserRedisServiceImpl implements UserRedisService
                              .timeout(Duration.ofSeconds(3L))
                              .collectMap(Map.Entry::getKey, Map.Entry::getValue)
                              .onErrorResume((exception) ->
-                                 genericErrorHandel(exception, new TreeMap<>())
+                                 redisGenericErrorHandel(exception, new TreeMap<>())
                              )
                              .map((unorderedMap) -> {
                                 /*
@@ -214,11 +257,11 @@ public class UserRedisServiceImpl implements UserRedisService
                                 this.redisTemplate.delete(key)
                                     .timeout(Duration.ofSeconds(3L))
                                     .onErrorResume((exception) ->
-                                        genericErrorHandel(exception, -1L)
+                                        redisGenericErrorHandel(exception, -1L)
                                     )
                                     .thenReturn(sortedMap)
                            )
-                       : genericErrorHandel(
+                       : redisGenericErrorHandel(
                            new IllegalArgumentException(format("Key: %s is not exist!", key)),
                            null
                        )
@@ -238,7 +281,7 @@ public class UserRedisServiceImpl implements UserRedisService
     {
         if (userName == null || userName.isEmpty())
         {
-            return genericErrorHandel(
+            return redisGenericErrorHandel(
                 new IllegalArgumentException(
                     "User name not be null or empty!"
                 ), null
@@ -252,13 +295,13 @@ public class UserRedisServiceImpl implements UserRedisService
             )
             .timeout(Duration.ofSeconds(3L))
             .onErrorResume((exception) ->
-                genericErrorHandel(exception, null)
+                redisGenericErrorHandel(exception, null)
             )
             .flatMap((key) ->
                 this.redisTemplate.delete(key)
                     .timeout(Duration.ofSeconds(3L))
                     .onErrorResume((exception) ->
-                        genericErrorHandel(exception, null)
+                        redisGenericErrorHandel(exception, null)
                     )
             )
             .then(Mono.just(true));
@@ -274,7 +317,7 @@ public class UserRedisServiceImpl implements UserRedisService
         )
         .timeout(Duration.ofSeconds(3L))
         .onErrorResume((exception) ->
-            genericErrorHandel(exception, null)
+            redisGenericErrorHandel(exception, null)
         )
         .map((key) -> {
                 String[] subStr = key.split(":");
