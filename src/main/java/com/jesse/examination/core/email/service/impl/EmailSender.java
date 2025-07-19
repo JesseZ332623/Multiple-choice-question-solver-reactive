@@ -419,16 +419,16 @@ public class EmailSender implements EmailSenderInterface
          */
         final Retry retryStrategy
             = Retry.backoff(MAX_ATTEMPT_TIMES, Duration.ofSeconds(1))
-            .maxBackoff(Duration.ofSeconds(10))
-            .filter(this::isRetryableError)
-            .doBeforeRetry(retrySignal -> {
-                // 记录尝试次数和失败原因
-                log.warn(
-                    "Retry attempt {} for email to {}.",
-                    retrySignal.totalRetries() + 1,
-                    emailContent.getTo()
-                );
-            });
+                   .maxBackoff(Duration.ofSeconds(10))
+                   .filter(this::isRetryableError)
+                   .doBeforeRetry(retrySignal -> {
+                        // 记录尝试次数和失败原因
+                        log.warn(
+                            "Retry attempt {} for email to {}.",
+                            retrySignal.totalRetries() + 1,
+                            emailContent.getTo()
+                        );
+                   });
 
         return this.getEmailPublisherInfo()
             .switchIfEmpty(
@@ -451,10 +451,12 @@ public class EmailSender implements EmailSenderInterface
                         true, format("Send email to: %s success!", emailContent.getTo()))
                 )
             )
-            .onErrorResume(exception -> {
+            .onErrorResume(exception ->
+            {
                 log.error(
-                    "Send email to {} finally failed! MAX_ATTEMPT_TIMES = {}",
-                    emailContent.getTo(), MAX_ATTEMPT_TIMES
+                    "Send email to {} finally failed! MAX_ATTEMPT_TIMES = {}. Cause: {}",
+                    emailContent.getTo(), MAX_ATTEMPT_TIMES,
+                    exception.getMessage(), exception
                 );
 
                 return Mono.just(
