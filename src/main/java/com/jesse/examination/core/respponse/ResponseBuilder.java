@@ -18,9 +18,7 @@ import java.time.Instant;
 import java.util.*;
 import java.util.function.Consumer;
 
-/**
- * HTTP 通用响应构建器。
- */
+/** HTTP 通用响应构建器。*/
 @Slf4j
 @Component
 public class ResponseBuilder
