@@ -7,7 +7,7 @@ import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.serializer.SerializationException;
 import reactor.core.publisher.Mono;
 
-/** 本项目所有的 Redis 操作中，通用的错误处理方法。 */
+/** 本项目所有的 Redis 操作中，通用的错误处理方法。*/
 @Slf4j
 public class RedisGenericErrorHandle
 {
@@ -22,7 +22,7 @@ public class RedisGenericErrorHandle
      * @return 承载了异常或者默认值的 Mono
      */
     public static <T> @NotNull Mono<T>
-    genericErrorHandel(@NotNull Throwable exception, T fallbackValue)
+    redisGenericErrorHandel(@NotNull Throwable exception, T fallbackValue)
     {
         switch (exception)
         {
