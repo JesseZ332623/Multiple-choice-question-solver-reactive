@@ -14,7 +14,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import static com.jesse.examination.core.redis.errorhandle.RedisGenericErrorHandle.genericErrorHandel;
+import static com.jesse.examination.core.redis.errorhandle.RedisGenericErrorHandle.redisGenericErrorHandel;
 import static com.jesse.examination.core.redis.keys.ConcatRedisKey.correctTimesHashKey;
 import static java.lang.String.format;
 
@@ -78,9 +78,9 @@ public class QuestionRedisServiceImpl implements QuestionRedisService
                                      )
                                     .timeout(Duration.ofSeconds(3L))
                                     .onErrorResume((exception) ->
-                                        genericErrorHandel(exception, -1L)
+                                        redisGenericErrorHandel(exception, -1L)
                                    )
-                               : genericErrorHandel(
+                               : redisGenericErrorHandel(
                                    new IllegalArgumentException(
                                        format("Key: %s not exist!", key + ":" + questionId)
                                    ), null
@@ -108,7 +108,7 @@ public class QuestionRedisServiceImpl implements QuestionRedisService
         return this.hashOperations.hasKey(key, String.valueOf(questionId))
                 .flatMap((isExist) ->
                     (!isExist)
-                        ? genericErrorHandel(
+                        ? redisGenericErrorHandel(
                             new IllegalArgumentException(
                                 format("Key: %s not exist!", key + ":" + questionId)
                             ), null)
@@ -120,7 +120,7 @@ public class QuestionRedisServiceImpl implements QuestionRedisService
                                 ? Mono.just(specifiedVal)
                                 : Mono.just(-1L)
                         ).onErrorResume((exception) ->
-                            genericErrorHandel(exception, -1L)
+                            redisGenericErrorHandel(exception, -1L)
                         )
                 );
     }
@@ -149,7 +149,7 @@ public class QuestionRedisServiceImpl implements QuestionRedisService
                                  .keys(key)
                                  .timeout(Duration.ofSeconds(3L))
                                  .onErrorResume((exception) ->
-                                     genericErrorHandel(exception, null))
+                                     redisGenericErrorHandel(exception, null))
                                  .collectList()
                                  .flatMap((keys) ->
                                  {
@@ -167,10 +167,10 @@ public class QuestionRedisServiceImpl implements QuestionRedisService
                                                 .putAll(key, clearedMap)
                                                 .timeout(Duration.ofSeconds(3L))
                                                 .onErrorResume((exception) ->
-                                                    genericErrorHandel(exception, false)
+                                                    redisGenericErrorHandel(exception, false)
                                                 );
                                })
-                           : genericErrorHandel(
+                           : redisGenericErrorHandel(
                                new IllegalArgumentException(
                                    format("Key: %s not exist!", key)
                                ), null
