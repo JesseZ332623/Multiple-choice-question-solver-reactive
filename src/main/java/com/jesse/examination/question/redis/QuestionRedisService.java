@@ -2,9 +2,7 @@ package com.jesse.examination.question.redis;
 
 import reactor.core.publisher.Mono;
 
-import java.util.Map;
-
-/** 问题数据统计 Redis 服务接口。 */
+/** 问题数据统计 Redis 服务接口。*/
 public interface QuestionRedisService
 {
    /**
