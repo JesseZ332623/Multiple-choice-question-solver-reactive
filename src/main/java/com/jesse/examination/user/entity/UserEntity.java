@@ -1,6 +1,9 @@
 package com.jesse.examination.user.entity;
 
+import com.jesse.examination.user.dto.UserRegistrationDTO;
 import lombok.*;
+import lombok.experimental.Accessors;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
@@ -9,33 +12,47 @@ import java.time.LocalDateTime;
 
 /** 用户实体类。*/
 @Data
+@Accessors(chain = true)
 @Table(name = "users")
 @NoArgsConstructor
-@RequiredArgsConstructor
 @EqualsAndHashCode
 @ToString
 public class UserEntity
 {
     @Id
     @Column(value = "user_id")
-    private @NonNull Long userId;
+    private Long userId;
 
     @Column(value = "user_name")
-    private @NonNull String userName;
+    private String userName;
 
     @Column(value = "password")
-    private @NonNull String password;
+    private String password;
 
     @Column(value = "full_name")
-    private @NonNull String fullName;
+    private String fullName;
 
     @Column(value = "telephone_number")
-    private @NonNull String telephoneNumber;
+    private String telephoneNumber;
 
     @Column(value = "email")
-    private @NonNull String email;
+    private String email;
 
     @Column(value = "register_datetime")
-    private @NonNull
-    LocalDateTime registerDate;
+    private LocalDateTime registerDate;
+
+    public static @NotNull UserEntity
+    fromUserRegistrationDTO(@NotNull UserRegistrationDTO userRegistrationDTO)
+    {
+        UserEntity newUser = new UserEntity();
+
+        newUser.setUserName(userRegistrationDTO.getUserName())
+               .setFullName(userRegistrationDTO.getFullName())
+               .setPassword(userRegistrationDTO.getPassword())
+               .setTelephoneNumber(userRegistrationDTO.getTelephoneNumber())
+               .setEmail(userRegistrationDTO.getEmail())
+               .setRegisterDate(LocalDateTime.now());
+
+        return newUser;
+    }
 }
