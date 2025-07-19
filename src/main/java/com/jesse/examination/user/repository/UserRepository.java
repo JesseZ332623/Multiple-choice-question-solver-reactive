@@ -26,6 +26,16 @@ public interface UserRepository
         @Param("userName") String userName
     );
 
+    /** 根据用户名查询对应的用户邮箱。*/
+    @Query("""
+            SELECT email FROM users
+            WHERE user_name = :userName
+        """)
+    Mono<String>
+    findEmailByUserName(
+        @Param("userName") String userName
+    );
+
     /** 根据用户名查询整个用户实体。*/
     @Query("""
             SELECT * FROM users
@@ -38,22 +48,24 @@ public interface UserRepository
 
     /** 检查指定用户名是否存在。*/
     @Query("""
-            SELECT COUNT(*) > 0
-            FROM users
-            WHERE user_name = :userName
+            SELECT EXISTS(
+                SELECT 1 FROM users
+                WHERE user_name = :userName
+            )
         """)
-    Mono<Boolean>
+    Mono<Integer>
     existsByUserName(
         @Param("userName") String userName
     );
 
     /** 检查指定用户全名是否存在。*/
     @Query("""
-            SELECT COUNT(*) > 0
-            FROM users
-            WHERE full_name = :fullName
+            SELECT EXISTS(
+                SELECT 1 FROM users
+                WHERE full_name = :fullName
+            )
         """)
-    Mono<Boolean>
+    Mono<Integer>
     existsByFullName(
         @Param("fallName") String fullName
     );
