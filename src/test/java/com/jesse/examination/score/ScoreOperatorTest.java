@@ -83,6 +83,12 @@ public class ScoreOperatorTest
                 .count().block()).equals(0L)
         ) { return; }
 
+        // 若用户表为空，插入成绩会因为外键限制而失败，因此不会允许本测试用例。
+        if (Objects.requireNonNull(
+            this.userRepository
+                .count().block()).equals(0L)
+        ) { return; }
+
         /* 生成总数据量。*/
         final int INSERT_AMOUNT = 500000;
         final int BUFFER_SIZE   = 10000;
