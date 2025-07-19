@@ -44,7 +44,7 @@ public class UserArchiveManagerImpl implements UserArchiveManager
     @Autowired
     private ProjectProperties projectProperties;
 
-    ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     private static final String AVATAR_FILE_NAME        = "avatar.png";
     private static final String CORRECT_TIMES_FILE_NAME = "correct_times.json";
