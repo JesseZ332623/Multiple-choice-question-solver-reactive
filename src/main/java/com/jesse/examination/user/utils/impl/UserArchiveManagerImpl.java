@@ -3,6 +3,7 @@ package com.jesse.examination.user.utils.impl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.jesse.examination.core.file.exception.FileOperatorException;
 import com.jesse.examination.core.file.service.FileTransferService;
 import com.jesse.examination.core.properties.ProjectProperties;
 import com.jesse.examination.question.repository.QuestionRepository;
@@ -71,7 +72,7 @@ public class UserArchiveManagerImpl implements UserArchiveManager
                     DEFAULT_CORRECT_MAP.put(String.valueOf(questionId), 0L)
                 );
 
-            DEFAULT_AVATAR = new AvatarImageData(
+            DEFAULT_AVATAR = AvatarImageData.fromBytes(
                 Files.readAllBytes(
                     Paths.get(
                         projectProperties.getDefaultAvatarPath()
@@ -86,7 +87,7 @@ public class UserArchiveManagerImpl implements UserArchiveManager
                 exception.getMessage(), exception
             );
 
-           DEFAULT_AVATAR = new AvatarImageData(new byte[0]);
+           DEFAULT_AVATAR = AvatarImageData.fromBytes(new byte[0]);
         }
     }
 
@@ -131,7 +132,7 @@ public class UserArchiveManagerImpl implements UserArchiveManager
 
             System.out.println("Avatar location: " + avatarImageLocation);
 
-            return new AvatarImageData(
+            return AvatarImageData.fromBytes(
                 Files.readAllBytes(avatarImageLocation)
             );
         }).onErrorResume((exception) -> {
@@ -241,7 +242,16 @@ public class UserArchiveManagerImpl implements UserArchiveManager
                       .saveTextFile(
                           newArchivePath, CORRECT_TIMES_FILE_NAME,
                           this.objectMapper.writeValueAsString(quesCorrectTimes)
-                      );
+                      ).onErrorResume(
+                    FileOperatorException.class,
+                    (exception) -> {
+                        log.error(exception.getMessage(), exception);
+
+                        return Mono.error(
+                            new UserArchiveOperatorFailedException(exception.getMessage())
+                        );
+                    }
+                );
 
             return setDefaultUserAvatar.then(setDefaultCorrectTimes);
         }).flatMap(mono -> mono);
