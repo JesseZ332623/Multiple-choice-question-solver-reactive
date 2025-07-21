@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
@@ -26,6 +27,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 
 /** 一个纯 Restful 响应式服务器的 Web Security 配置类。*/
 @Configuration
@@ -41,7 +43,7 @@ public class WebSecurityConfig
     private ProjectProperties projectProperties;
 
 
-    private Converter<Jwt, Mono<AbstractAuthenticationToken>>
+    private @NotNull Converter<Jwt, Mono<AbstractAuthenticationToken>>
     grantedAuthoritiesConverter()
     {
         JwtGrantedAuthoritiesConverter authoritiesConverter
@@ -62,7 +64,7 @@ public class WebSecurityConfig
          return converter;
     }
 
-    /** 密码解码器的构建。*/
+    /** 密码加密器的构建。*/
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -74,7 +76,7 @@ public class WebSecurityConfig
     {
         SecretKey key = Keys.hmacShaKeyFor(
             this.projectProperties
-                .getJwtSecretKey().getBytes()
+                .getJwtSecretKey().getBytes(StandardCharsets.UTF_8)
         );
 
         return NimbusReactiveJwtDecoder.withSecretKey(key).build();
@@ -100,15 +102,16 @@ public class WebSecurityConfig
             )
             /* 对于不同的 API，划定不同的权限（目前处于开发阶段，暂时放行所有 /api/ 下的请求）。 */
             .authorizeExchange((exchange) ->
-//                exchange.pathMatchers(HttpMethod.GET, "/api/public/**").permitAll()
-//                        .pathMatchers(HttpMethod.POST, "/api/admin/login").permitAll()
-//                        .pathMatchers(HttpMethod.POST, "/api/user/login").permitAll()
-//                        .pathMatchers("/api/admin/**").hasRole("ROLE_ADMIN")
-//                        .pathMatchers("/api/user/**").hasAnyRole("ROLE_USER", "ROLE_ADMIN")
-//                        .pathMatchers("/api/**").authenticated()
-//                        .anyExchange().denyAll()    // 若发起上述 API 之外的请求，通通拒绝
-                exchange.pathMatchers("/api/**").permitAll()
-                        .anyExchange().denyAll()
+                exchange.pathMatchers(HttpMethod.GET, "/api/public/**").permitAll()
+                        .pathMatchers(HttpMethod.POST, "api/user/register").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/api/admin/login").permitAll()
+                        .pathMatchers(HttpMethod.POST, "/api/user/login").permitAll()
+                        .pathMatchers(HttpMethod.POST, "api/user/send_verify_code_email").permitAll()
+                        .pathMatchers("/api/admin/**").hasRole("ADMIN")
+                        .pathMatchers("/api/user/**").hasAnyRole("USER", "ADMIN")
+                        .pathMatchers("/api/question/**").hasAnyRole("USER", "ADMIN")
+                        .pathMatchers("/api/score/**").hasAnyRole("USER", "ADMIN")
+                        .anyExchange().denyAll()    // 若发起上述 API 之外的请求，通通拒绝
             )
             .oauth2ResourceServer((oauth2) ->
                 oauth2.jwt(
@@ -116,7 +119,6 @@ public class WebSecurityConfig
                         grantedAuthoritiesConverter()
                     )
                 )
-            )
-            .build();
+            ).build();
     }
 }
