@@ -15,11 +15,11 @@ public interface UserService
     Mono<ServerResponse>
     userLogin(ServerRequest request);
 
-    /** 用户登出服务。 */
+    /** 用户登出服务。*/
     Mono<ServerResponse>
     userLogout(ServerRequest request);
 
-    /** 用户修改账户数据服务（用户在修改前需要验证一次账户）。*/
+    /** 用户修改账户数据服务（用户在修改前需药发送验证码进行再执行修改）。*/
     Mono<ServerResponse>
     userModifyUserInfo(ServerRequest request);
 
@@ -31,7 +31,7 @@ public interface UserService
     Mono<ServerResponse>
     sendVarifyCodeEmail(ServerRequest request);
 
-    /** 通过用户名获取用户头像数据。 */
+    /** 通过用户名获取用户头像数据。*/
     Mono<ServerResponse>
     getUserAvatarImage(ServerRequest request);
 
