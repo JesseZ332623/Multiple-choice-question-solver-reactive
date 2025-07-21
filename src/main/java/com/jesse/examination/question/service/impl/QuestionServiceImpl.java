@@ -312,14 +312,13 @@ public class QuestionServiceImpl implements QuestionService
                                                 );
                                             }
 
-                                            response.withPagination(params.getT1(), params.getT2(), count);
-                                            response.setData(questions);
-                                            response.setMessage(
-                                                format(
-                                                    "Query questions (Page = %d, Amount = %d) complete!",
-                                                    page, amount
-                                                )
-                                            );
+                                            response.withPagination(params.getT1(), params.getT2(), count)
+                                                    .setMessage(
+                                                        format(
+                                                            "Query questions (Page = %d, Amount = %d) complete!",
+                                                            page, amount
+                                                        ))
+                                                    .setData(questions);
 
                                             return this.responseBuilder.build(
                                                 (headers) ->
