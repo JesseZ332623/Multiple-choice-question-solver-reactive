@@ -1,27 +1,36 @@
 package com.jesse.examination.user.service.impl;
 
 import com.jesse.examination.core.email.dto.EmailContent;
+import com.jesse.examination.core.email.exception.EmailException;
 import com.jesse.examination.core.email.service.EmailSenderInterface;
+import com.jesse.examination.core.exception.ResourceNotFoundException;
 import com.jesse.examination.core.properties.ProjectProperties;
+import com.jesse.examination.core.redis.exception.ProjectRedisOperatorException;
 import com.jesse.examination.core.respponse.ResponseBuilder;
 import com.jesse.examination.user.dto.UserLoginDTO;
 import com.jesse.examination.user.dto.UserRegistrationDTO;
 import com.jesse.examination.user.entity.UserEntity;
 import com.jesse.examination.user.exception.DuplicateUserException;
 import com.jesse.examination.user.exception.EmptyRequestDataException;
+import com.jesse.examination.user.exception.UserArchiveOperatorFailedException;
 import com.jesse.examination.user.redis.UserRedisService;
 import com.jesse.examination.user.repository.RolesRepository;
 import com.jesse.examination.user.repository.UserRepository;
 import com.jesse.examination.user.service.UserService;
 import com.jesse.examination.user.utils.LoginAuthService;
 import com.jesse.examination.user.utils.UserArchiveManager;
+import com.jesse.examination.user.utils.dto.AvatarImageData;
 import com.jesse.examination.user.utils.exception.UserLoginFailedException;
 import io.netty.handler.timeout.TimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.reactive.TransactionalOperator;
@@ -77,155 +86,259 @@ public class UserServiceImpl implements UserService
      * <p>在正式将数据写入之前，要对名字进行是否已经存在的校验。</p>
      *
      * <code><pre>
-     * Usage 1. nameDuplicateCheck("Jesse", userRepository::existsByUsername);
-     * Usage 2. nameDuplicateCheck("Peter-Griffin", userRepository::existsByFullName);
+     * Usage:
+     *      nameDuplicateCheck("Jesse", userRepository.existByName(name));
      * </pre></code>
      *
      * @param name 用户名或全名
-     *
-     * @throws DuplicateUserException
-     *         当用户名冲突的时候所抛的异常
+     * @throws DuplicateUserException 当用户名冲突的时候所抛的异常
      */
     private static @NotNull Mono<Void>
     nameDuplicateCheck(String name, @NotNull Mono<Boolean> checker)
     {
-        log.info("Ckeck name: {}", name);
+        log.info("Check name: {}", name);
 
-        return checker.flatMap((isDuplicate) -> {
-            if (isDuplicate) {
+        return checker.flatMap((isDuplicate) ->
+        {
+            if (isDuplicate)
+            {
                 throw new DuplicateUserException(
-                    format("Name: %s aleardy exist!", name)
+                    format("Name: %s already exist!", name)
                 );
             }
             else { return Mono.empty(); }
         });
     }
 
-    /** 用户服务的通用错误处理。*/
+    /**
+     * 用户服务的通用错误处理。
+     */
     private @NotNull Mono<ServerResponse>
-    genericErrorHandle(@NotNull Mono<ServerResponse> mono)
+    genericErrorHandle(@NotNull Throwable exception)
     {
-        return mono.onErrorResume(
-            EmptyRequestDataException.class,
-                (exception) ->
-                this.responseBuilder.BAD_REQUEST(exception.getMessage(), exception))
-            .onErrorResume(
-                TimeoutException.class,
-                (exception) ->
-                    this.responseBuilder.INTERNAL_SERVER_ERROR(exception.getMessage(), exception))
-            .onErrorResume(DataAccessResourceFailureException.class,
-                (exception) ->
-                    this.responseBuilder.INTERNAL_SERVER_ERROR(exception.getMessage(), exception))
-            .onErrorResume(
-                Exception.class,
-                (exception) ->
-                    this.responseBuilder.INTERNAL_SERVER_ERROR(exception.getMessage(), exception)
-            );
+        return switch (exception)
+        {
+            case IllegalArgumentException illegalArgumentException ->
+                this.responseBuilder
+                    .BAD_REQUEST(
+                        illegalArgumentException.getMessage(),
+                        illegalArgumentException
+                    );
+
+            case EmptyRequestDataException emptyRequestDataException ->
+                this.responseBuilder
+                    .BAD_REQUEST(
+                        emptyRequestDataException.getMessage(),
+                        emptyRequestDataException
+                    );
+
+            case ResourceNotFoundException resourceNotFoundException ->
+                this.responseBuilder
+                    .NOT_FOUND(
+                        resourceNotFoundException.getMessage(),
+                        resourceNotFoundException
+                    );
+
+            case UserLoginFailedException userLoginFailedException ->
+                this.responseBuilder
+                    .BAD_REQUEST(
+                        userLoginFailedException.getMessage(),
+                        userLoginFailedException
+                    );
+
+            case UserArchiveOperatorFailedException userArchiveOperatorFailedException ->
+                this.responseBuilder.BAD_REQUEST(
+                    userArchiveOperatorFailedException.getMessage(),
+                    userArchiveOperatorFailedException
+                );
+
+            case ProjectRedisOperatorException projectRedisOperatorException ->
+                this.responseBuilder
+                    .INTERNAL_SERVER_ERROR(
+                        projectRedisOperatorException.getMessage(),
+                        projectRedisOperatorException
+                    );
+
+            case DataAccessResourceFailureException dataAccessResourceFailureException ->
+                this.responseBuilder
+                    .INTERNAL_SERVER_ERROR(
+                        dataAccessResourceFailureException.getMessage(),
+                        dataAccessResourceFailureException
+                    );
+
+            case TimeoutException timeoutException ->
+                this.responseBuilder
+                    .INTERNAL_SERVER_ERROR(
+                        timeoutException.getMessage(),
+                        timeoutException
+                    );
+
+            case Exception unknowException ->
+                this.responseBuilder
+                    .INTERNAL_SERVER_ERROR(
+                        unknowException.getMessage(),
+                        unknowException
+                    );
+
+            default ->
+                this.responseBuilder
+                    .INTERNAL_SERVER_ERROR(
+                        "UNKNOW ERROR!",
+                        null
+                    );
+        };
     }
 
+    /**
+     * <p>用户注册服务的实现，注册共分为以下几个操作：</p>
+     *
+     * <ol>
+     *     <li>校验从请求体中的用户名和全名是否重复。</li>
+     *     <li>创建新用户实体和对应角色并存入数据库。</li>
+     *     <li>创建新用户存档。</li>
+     *     <li>根据执行中不同的情况返回不同的响应体。</li>
+     * </ol>
+     *
+     * @param request 从前端传来的注册请求
+     *
+     * @return 返回响应体
+     *
+     * @throws EmptyRequestDataException          用户的请求体中没有携带任何数据时抛出
+     * @throws DuplicateUserException             用户名或全名的验证中出现重复时抛出
+     * @throws TimeoutException                   网络通信超时（访问数据库或者其他网络服务）所抛出的异常
+     * @throws DataAccessResourceFailureException 获取不到数据库连接时抛出
+     * @throws UserArchiveOperatorFailedException 读写用户存档出现问题时抛出的异常
+     */
     @Override
     public Mono<ServerResponse>
     userRegister(@NotNull ServerRequest request)
     {
-        return this.genericErrorHandle(
-            request.bodyToMono(UserRegistrationDTO.class)
-                   .switchIfEmpty(
-                       Mono.error(new EmptyRequestDataException("Register data not be null!")))
-                   .flatMap((registInfo) ->
-                   {
-                       final String userName = registInfo.getUserName();
-                       final String fullName = registInfo.getFullName();
+        return request.bodyToMono(UserRegistrationDTO.class)
+            .switchIfEmpty(
+                Mono.error(new EmptyRequestDataException("Register data not be empty!")))
+            .flatMap((registerInfo) ->
+            {
+                final String userName = registerInfo.getUserName();
+                final String fullName = registerInfo.getFullName();
 
-                       /* 1. 校验用户名与全名。*/
-                       Mono<Void> nameChecks
-                           = nameDuplicateCheck(
-                               userName,
-                               this.userRepository
-                                   .existsByUserName(userName)
-                                   .map(isExist -> isExist != 0))
-                               .and(nameDuplicateCheck(
-                                   fullName,
-                                   this.userRepository.existsByFullName(fullName)
-                                       .map(isExist -> isExist != 0)
-                                   )
-                               );
+                /* 1. 校验用户名与全名。*/
+                Mono<Void> nameChecks
+                    = nameDuplicateCheck(
+                    userName,
+                    this.userRepository
+                        .existsByUserName(userName)
+                        .map(isExist -> isExist != 0))
+                    .and(nameDuplicateCheck(
+                            fullName,
+                            this.userRepository.existsByFullName(fullName)
+                                .map(isExist -> isExist != 0)
+                        )
+                    );
 
-                       /* 2. 创建新用户实体并存入数据库。*/
-                       Mono<Void> createNewUser
-                           = Mono.fromCallable(() ->
-                               this.passwordEncoder.encode(registInfo.getPassword()))
-                                   .subscribeOn(Schedulers.boundedElastic()) // 加密过程非常耗时，丢给别的线程去干
-                                   .flatMap(
-                                       (encodedPassword) -> {
-                                           registInfo.setPassword(encodedPassword);
+                /* 2. 创建新用户实体和对应角色并存入数据库。*/
+                Mono<Void> createNewUser
+                    = Mono.fromCallable(() ->
+                        this.passwordEncoder.encode(registerInfo.getPassword()))
+                    .subscribeOn(Schedulers.boundedElastic()) // 加密过程非常耗时，丢给线程池去调度
+                    .flatMap(
+                        (encodedPassword) -> {
+                            registerInfo.setPassword(encodedPassword); // 设置完成加密的密码
 
-                                           return this.userRepository.save(UserEntity.fromUserRegistrationDTO(registInfo))
-                                                       .flatMap((newUser) ->
-                                                           this.rolesRepository
-                                                               .addNewRole(newUser.getUserId(), ROLE_USER.getRoleId())
-                                                       );
-                                               }).then();
+                            // 正式写入用户和角色的数据
+                            return this.userRepository.save(UserEntity.fromUserRegistrationDTO(registerInfo))
+                                .flatMap((newUser) ->
+                                    this.rolesRepository
+                                        .addNewRole(newUser.getUserId(), ROLE_USER.getRoleId())
+                                );
+                        }).then();
 
-                       /* 创建新用户存档。*/
-                       Mono<Void> createNewUserArchive
-                           = this.userArchiveManager
-                                 .createNewArchiveForNewUser(registInfo.getUserName());
+                /* 创建新用户存档。*/
+                Mono<Void> createNewUserArchive
+                    = this.userArchiveManager
+                    .createNewArchiveForNewUser(registerInfo.getUserName());
 
-                       /* 将创建新用户的整个动作，包装在一个事务内。*/
-                       return this.transactionalOperator.transactional(
-                           nameChecks.then(createNewUser)
-                                     .then(createNewUserArchive)
-                                     .timeout(Duration.ofSeconds(5L))
-                                     .then(
-                                         this.responseBuilder.OK(
-                                             registInfo,
-                                             format(
-                                                 "Registe successful! Welcome my new user: %s",
-                                                 registInfo.getUserName()
-                                             ),
-                                             null, null
-                                         )
-                                   )
-                   ).onErrorResume(
-                       DuplicateUserException.class,
-                       (exception) ->
-                           this.responseBuilder.BAD_REQUEST(exception.getMessage(), exception)
-                   );
-               })
-        );
+                /* 将创建新用户的整个动作，包装在一个事务内。*/
+                return this.transactionalOperator.transactional(
+                    nameChecks.then(createNewUser)
+                        .then(createNewUserArchive)
+                        .timeout(Duration.ofSeconds(5L))
+                        .then(
+                            this.responseBuilder.OK(
+                                registerInfo,
+                                format(
+                                    "Register successful! Welcome my new user: %s",
+                                    registerInfo.getUserName()
+                                ), null, null
+                            ))
+                        .onErrorResume(
+                            // 注意异常处理的优先级（先处理业务特定异常，再处理通用异常）
+                            (exception) -> {
+                                if (exception instanceof DuplicateUserException)
+                                {
+                                    return this.responseBuilder
+                                               .BAD_REQUEST(exception.getMessage(), exception);
+                                }
+                                else {
+                                    return this.genericErrorHandle(exception);
+                                }
+                            }
+                        )
+                );
+            }).onErrorResume(this::genericErrorHandle);
     }
 
+    /**
+     * <p>用户登录服务的实现，登录主要分为以下几个操作：</p>
+     *
+     * <ol>
+     *     <li>从请求中读取用户登录表单中的数据。</li>
+     *     <li>调用登录验证器 {@link LoginAuthService} 逐一比对用户登录数据。</li>
+     *     <li>加载对应用户存档。</li>
+     *     <li>根据执行中不同的情况返回不同的响应体。</li>
+     * </ol>
+     *
+     * @param request 从前端传来的登录请求
+     *
+     * @return 返回响应体
+     *
+     * @throws EmptyRequestDataException          用户的请求体中没有携带任何数据时抛出
+     * @throws UserLoginFailedException           登录检查失败时抛出
+     * @throws TimeoutException                   网络通信超时（访问数据库或者其他网络服务）所抛出的异常
+     * @throws DataAccessResourceFailureException 获取不到数据库连接时抛出
+     * @throws UserArchiveOperatorFailedException 读写用户存档出现问题时抛出的异常
+     */
     @Override
     public Mono<ServerResponse>
     userLogin(@NotNull ServerRequest request)
     {
-        return this.genericErrorHandle(
-            request.bodyToMono(UserLoginDTO.class)
-                    .switchIfEmpty(
-                        Mono.error(new EmptyRequestDataException("Login data not be null!")))
-                   .flatMap((loginInfo) ->
-                       this.loginAuthService.userLoginVarifier(loginInfo)   // 用户表单验证，成功后返回 Token
-                           .flatMap((jwt) ->
-                               this.userArchiveManager  // 加载用户存档，成功后返回 OK 响应
-                                   .readUserArchive(loginInfo.getUserName())
-                                   .then(
-                                       this.responseBuilder.OK(
-                                           jwt, format("User: %s login success!", loginInfo.getUserName()),
-                                           null, null
-                                  )
-                               )
-                           )
-                      ).onErrorResume(
-                          UserLoginFailedException.class,
-                         (exception) ->
-                             this.responseBuilder.BAD_REQUEST(exception.getMessage(), exception)
-                      )
-        );
+        return request.bodyToMono(UserLoginDTO.class)
+            .switchIfEmpty(
+                Mono.error(new EmptyRequestDataException("Login data not be empty!")))
+            .flatMap((loginInfo) ->
+                this.loginAuthService.userLoginVarifier(loginInfo)
+                    .flatMap((jwt) -> {
+                        // 加载用户存档
+                        Mono<Void> readArchive
+                            = this.userArchiveManager
+                            .readUserArchive(loginInfo.getUserName());
+
+                        return this.transactionalOperator.transactional(
+                            readArchive.then(
+                                this.responseBuilder.OK(
+                                    jwt,
+                                    format("User: %s login success!", loginInfo.getUserName()),
+                                    null, null
+                                )
+                            )
+                        );
+                    })
+            ).onErrorResume(this::genericErrorHandle);
     }
 
     @Override
     public Mono<ServerResponse>
-    userLogout(ServerRequest request) {
+    userLogout(ServerRequest request)
+    {
         return null;
     }
 
@@ -241,76 +354,207 @@ public class UserServiceImpl implements UserService
         return null;
     }
 
+    /**
+     * sendVarifyCodeEmail() 的辅助方法，
+     * 查询器用户名对应的邮箱。
+     *
+     * @param userName 解析前端传来的请求体参数获得的用户名
+     *
+     * @throws IllegalArgumentException  在请求体参数解析失败时抛出
+     * @throws ResourceNotFoundException 解析的用户名在数据库中查询不到邮箱时抛出
+     *
+     * @return 承载了对应邮箱字符串的 Mono
+     */
+    private @NotNull Mono<String>
+    findUserEmail(String userName)
+    {
+        return this.userRepository
+                   .findEmailByUserName(userName)
+                   .switchIfEmpty(
+                       Mono.error(
+                           new ResourceNotFoundException(
+                               format("User name: %s not exist!", userName)
+                           )
+                       )
+                   );
+    }
+
+    /**
+     * sendVarifyCodeEmail() 的辅助方法，
+     * 在 findUserEmail() 之后，向指定用户发送验证码邮件。
+     *
+     * @param userName  用户名
+     * @param userEmail 用户邮箱
+     *
+     * @throws EmailException 在发送邮件操作中出现的任何错误都会抛该异常
+     *
+     * @return 返回验证码字符串，下游的 Redis 操作需要进行存储。
+     */
+    private @NotNull Mono<String>
+    sendVarifyCodeEmail(String userName, String userEmail)
+    {
+        return generateVarifyCode(
+            Integer.parseInt(
+                this.projectProperties.getVarifyCodeLength()))
+        .flatMap((varifyCode) ->
+        {
+            Duration expiration
+                = Duration.ofMinutes(
+                    Long.parseLong(this.projectProperties.getVarifyCodeExpiration()) / 60
+                );
+
+            return this.emailSender
+                       .sendEmail(EmailContent.fromVarify(
+                           userName, userEmail,
+                           varifyCode, expiration)
+                       )
+                       .then(Mono.just(varifyCode));
+        });
+    }
+
+    /**
+     * sendVarifyCodeEmail() 的辅助方法，
+     * 在 sendVarifyCodeEmail() 之后，将验证码存入 redis。
+     *
+     * @param userName   用户名
+     * @param varifyCode 上游生成的验证码
+     *
+     * @throws ProjectRedisOperatorException Redis 操作出错时抛出的异常
+     *
+     * @return Redis 操作是否成功？作为下游返回何种响应的依据。
+     */
+    private @NotNull Mono<Boolean>
+    saveVarifyCodeToRedis(String userName, String varifyCode)
+    {
+        return this.userRedisService
+                   .saveUserVarifyCode(userName, varifyCode);
+    }
+
+    /**
+     * 从前端请求中解析用户名，
+     * 向该用户发出一封验证码邮件。
+     */
     @Override
     public Mono<ServerResponse>
     sendVarifyCodeEmail(ServerRequest request)
     {
-        return this.genericErrorHandle(
-            generateVarifyCode(
-                Integer.parseInt(this.projectProperties.getVarifyCodeLength())
-        ).flatMap((varifyCode) ->
-            praseRequestParam(request, "name")
-                .flatMap((userName) ->
-                    this.userRepository.findEmailByUserName(userName)
-                        .flatMap((userEmail) ->
-                        {
-                            Duration expiration
-                                = Duration.ofMinutes(
-                                    Long.parseLong(
-                                        this.projectProperties.getVarifyCodeExpiration()) / 60
-                            );
+        return praseRequestParam(request, "name")
+            .flatMap((userName) ->
+                this.findUserEmail(userName)
+                    .flatMap((userEmail) ->
+                        this.sendVarifyCodeEmail(userName, userEmail)
+                            .flatMap((varifyCode) ->
+                                this.saveVarifyCodeToRedis(userName, varifyCode)
+                                    .flatMap((isSuccess) ->
+                                        (isSuccess)
+                                            ? this.responseBuilder.OK(
+                                                null,
+                                                format("Send varify code to %s complete!", userEmail),
+                                                null, null)
+                                            : this.responseBuilder.BAD_REQUEST(
+                                                format("Send varify code to %s failed!", userEmail),
+                                                null
+                                            )
+                                    ))
+                    )
+            ).onErrorResume((exception) -> {
+                if (exception instanceof IllegalArgumentException)
+                {
+                    return this.responseBuilder
+                               .BAD_REQUEST(exception.getMessage(), exception);
+                }
+                else if (exception instanceof EmailException)
+                {
+                    return this.responseBuilder
+                               .INTERNAL_SERVER_ERROR(exception.getMessage(), exception);
+                }
+                else {
+                    return this.genericErrorHandle(exception);
+                }
+            });
+    }
 
-                            return this.emailSender.sendEmail(
-                                EmailContent.fromVarify(
-                                    userName, userEmail,
-                                    varifyCode, expiration
-                                )
-                            ).flatMap((sendReport) -> {
-                                if (sendReport.getKey())
-                                {
-                                    return this.userRedisService
-                                               .saveUserVarifyCode(userName, varifyCode)
-                                               .flatMap((isSuccess) -> {
-                                                   if (!isSuccess)
-                                                   {
-                                                       return this.responseBuilder.INTERNAL_SERVER_ERROR(
-                                                           "Save varify code to redis failed!", null
-                                                       );
-                                                   }
-                                                   else
-                                                   {
-                                                       return this.responseBuilder.OK(
-                                                           null, sendReport.getValue(),
-                                                           null, null
-                                                       );
-                                                   }
-                                               });
-                                }
-                                else
-                                {
-                                    return this.responseBuilder
-                                               .BAD_REQUEST(sendReport.getValue(), null);
-                                }
-                            });
-                        })
-                ).onErrorResume(
-                    IllegalArgumentException.class,
-                    (exception) ->
-                        this.responseBuilder.BAD_REQUEST(exception.getMessage(), exception)
-                )
+    /** 从前端请求中解析用户名，获取该用户的头像数据。*/
+    @Override
+    public Mono<ServerResponse>
+    getUserAvatarImage(ServerRequest request)
+    {
+        return praseRequestParam(request, "name")
+            .flatMap((userName) ->
+                this.userArchiveManager
+                    .getAvatarImageByUserName(userName)
+                    .flatMap((avatar) ->
+                        ServerResponse.status(HttpStatus.OK)
+                                      .headers((headers) ->
+                                          headers.setContentType(MediaType.IMAGE_PNG))
+                                      .bodyValue(avatar.getAvatarBytes())
+                    )
             )
+            .onErrorResume(this::genericErrorHandle);
+    }
+
+    /**
+     * setUserAvatarImage() 的辅助方法，
+     * 读取前端传来的的二进制数据，将其映射成 AvatarImageData 后返回。
+     *
+     * @param buffer 前端传来的二进制数据
+     *
+     * @return 承载了 AvatarImageData 实例的 Mono
+     */
+    private @NotNull Mono<AvatarImageData>
+    readAvatarFromBinary(@NotNull DataBuffer buffer)
+    {
+        byte[] bytes = new byte[buffer.readableByteCount()];
+
+        buffer.read(bytes);
+        DataBufferUtils.release(buffer);
+
+        return Mono.just(
+            AvatarImageData.fromBytes(bytes)
         );
     }
 
+    /**
+     * 从前端请求中解析用户名和新头像字节数据，
+     * 设置该用户的头像数据。
+     */
     @Override
     public Mono<ServerResponse>
-    getUserAvatarImage(ServerRequest request) {
-        return null;
-    }
-
-    @Override
-    public Mono<ServerResponse>
-    setUserAvatarImage(ServerRequest request) {
-        return null;
+    setUserAvatarImage(@NotNull ServerRequest request)
+    {
+        return request.bodyToMono(DataBuffer.class)
+            .switchIfEmpty(
+                Mono.error(new EmptyRequestDataException("Avatar image data not be empty!")))
+            .flatMap((buffer) ->
+                this.readAvatarFromBinary(buffer)
+                    .flatMap((avatar) ->
+                        praseRequestParam(request, "name")
+                            .flatMap((userName) ->
+                                this.userRepository.existsByUserName(userName)
+                                    .map((res) -> res != 0)
+                                    .flatMap((isExist) ->
+                                        (isExist)
+                                            ? this.userArchiveManager
+                                                  .setUserAvatarImage(userName, avatar)
+                                                  .then(
+                                                    this.responseBuilder.OK(
+                                                        null,
+                                                        format("Set new avatar for user: %s success!", userName),
+                                                        null, null
+                                                    )
+                                                  )
+                                            : Mono.error(
+                                                new ResourceNotFoundException(
+                                                    format(
+                                                        "Set avatar image for user %s failed! Cause: User %s not exist!",
+                                                        userName, userName
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    )
+                            )
+                        )
+            .onErrorResume(this::genericErrorHandle);
     }
 }
