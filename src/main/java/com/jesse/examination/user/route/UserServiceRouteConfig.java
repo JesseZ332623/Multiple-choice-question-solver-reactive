@@ -12,7 +12,7 @@ import static com.jesse.examination.user.route.UserServiceURL.*;
 
 /** 用户模块路由函数配置类。*/
 @Configuration
-public class UserSeviceRouteConfig
+public class UserServiceRouteConfig
 {
     @Autowired
     private UserService userService;
@@ -22,9 +22,11 @@ public class UserSeviceRouteConfig
     userRouterFunction()
     {
         return RouterFunctions.route()
-                .POST(USER_RIGISTER_URI, this.userService::userRegister)
-                .POST(USER_LOGIN_URI, this.userService::userLogin)
+                .GET(GET_AVATAR_IMAGE,   this.userService::getUserAvatarImage)
+                .POST(USER_REGISTER_URI, this.userService::userRegister)
+                .POST(USER_LOGIN_URI,    this.userService::userLogin)
                 .POST(SEND_VARIFY_EMAIL, this.userService::sendVarifyCodeEmail)
+                .PUT(SET_AVTAR_IMAGE,    this.userService::setUserAvatarImage)
                 .build();
     }
 }
