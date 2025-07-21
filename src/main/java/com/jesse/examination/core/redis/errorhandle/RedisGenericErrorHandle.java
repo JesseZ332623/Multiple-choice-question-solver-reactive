@@ -1,5 +1,6 @@
 package com.jesse.examination.core.redis.errorhandle;
 
+import com.jesse.examination.core.redis.exception.ProjectRedisOperatorException;
 import io.lettuce.core.RedisCommandTimeoutException;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -48,8 +49,10 @@ public class RedisGenericErrorHandle
                 );
         }
 
-        /* 若 fallbackValue 的值为空，异常会向上传递。*/
+        /* 若 fallbackValue 的值为空，异常会 re-throw 然后向上传递。*/
         return (fallbackValue != null)
-            ? Mono.just(fallbackValue) : Mono.error(exception);
+                    ? Mono.just(fallbackValue)
+                    : Mono.error(
+                        new ProjectRedisOperatorException(exception.getMessage()));
     }
 }
