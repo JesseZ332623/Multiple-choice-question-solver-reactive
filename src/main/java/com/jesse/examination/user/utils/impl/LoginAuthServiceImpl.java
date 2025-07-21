@@ -1,12 +1,10 @@
 package com.jesse.examination.user.utils.impl;
 
+import com.jesse.examination.core.exception.ResourceNotFoundException;
 import com.jesse.examination.core.properties.ProjectProperties;
 import com.jesse.examination.user.dto.UserLoginDTO;
 import com.jesse.examination.user.redis.UserRedisService;
-import com.jesse.examination.user.repository.RolesRepository;
-import com.jesse.examination.user.repository.UserRepository;
 import com.jesse.examination.user.utils.LoginAuthService;
-import com.jesse.examination.user.utils.dto.UserWithRoles;
 import com.jesse.examination.user.utils.exception.PasswordMissmatchException;
 import com.jesse.examination.user.utils.exception.UserLoginFailedException;
 import com.jesse.examination.user.utils.exception.VarifyCodeMismatchException;
@@ -16,18 +14,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.InsufficientAuthenticationException;
+import org.springframework.security.core.userdetails.ReactiveUserDetailsService;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
 
 import javax.crypto.SecretKey;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
@@ -38,10 +34,7 @@ import static java.lang.String.format;
 public class LoginAuthServiceImpl implements LoginAuthService
 {
     @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private RolesRepository rolesRepository;
+    private ReactiveUserDetailsService userDetailsService;
 
     @Autowired
     private UserRedisService userRedisService;
@@ -52,55 +45,56 @@ public class LoginAuthServiceImpl implements LoginAuthService
     @Autowired
     private PasswordEncoder passwordEncoder;
 
-    @Autowired
-    private TransactionalOperator transactionalOperator;
-
     @Override
     public Mono<String>
     userLoginVarifier(@NotNull UserLoginDTO userLoginDTO)
     {
-        log.info(userLoginDTO.toString());
-
         Mono<Void> checkVarifyCode
-            = this.varifyCodeCheck(userLoginDTO.getUserName(), userLoginDTO.getVarifyCode())
-            .onErrorResume((exception) -> {
-                log.error("{}", exception.getMessage());
-                return Mono.error(exception);
-            });
+            = this.varifyCodeCheck(
+                userLoginDTO.getUserName(), userLoginDTO.getVarifyCode()
+            );
+
+        Mono<UserDetails> getUserDetails
+            = this.userDetailsService
+            .findByUsername(userLoginDTO.getUserName())
+            .onErrorResume((exception) ->
+                Mono.error(new UserLoginFailedException(
+                    format(
+                        "User: %s login failed! Cause: %s",
+                        userLoginDTO.getUserName(), exception.getMessage()
+                    ))
+                )
+            );
 
         Mono<String> checkPasswordAndGenerateJWTToken
-            = this.userRepository
-                  .findUserByUserName(userLoginDTO.getUserName())
-                  .flatMap((user) -> {
+            = getUserDetails.flatMap((user) -> {
                       Mono<Void> checkPassword
-                        = this.passwordVarifier(userLoginDTO.getPassword(), user.getPassword());
+                          = this.passwordVarifier(
+                              userLoginDTO.getPassword(), user.getPassword()
+                          );
 
                       Mono<String> generateJWTToken
-                          = this.rolesRepository
-                                .findRolesByUserId(user.getUserId())
-                                .collect(Collectors.toSet())
-                                .map((roles) ->
-                                    this.generateJWTToken(UserWithRoles.fromUserEntity(user, roles))
-                                );
+                          = this.generateJWTToken(user);
 
                       return checkPassword.then(generateJWTToken);
-                  }).onErrorResume(Mono::error);
+                  });
 
-        return transactionalOperator.transactional(
-                    checkVarifyCode.then(checkPasswordAndGenerateJWTToken))
+        return checkVarifyCode.then(checkPasswordAndGenerateJWTToken)
                     .timeout(Duration.ofSeconds(5L))
-                    .doOnSuccess(ignore ->
-                        log.info("User: {} login success!", userLoginDTO.getUserName()))
-                    .doOnError(exception ->
-                        log.error("Login failed! Cause: {}", exception.getMessage(), exception))
-                    .onErrorResume((exception) ->
-                        Mono.error(new UserLoginFailedException(
+                    .onErrorResume((exception) -> {
+                        log.error(
+                            "User: {} login failed! Cause: {}",
+                            userLoginDTO.getUserName(),
+                            exception.getMessage(), exception
+                        );
+
+                        return Mono.error(new UserLoginFailedException(
                             format(
                                 "User: %s login failed! Cause: %s",
                                 userLoginDTO.getUserName(), exception.getMessage()
                             )
-                        ))
-                    );
+                        ));
+                    });
     }
 
     private @NotNull Mono<Void>
@@ -122,6 +116,13 @@ public class LoginAuthServiceImpl implements LoginAuthService
     varifyCodeCheck(String userName, String varifyCodeFromInput)
     {
         return this.userRedisService.getUserVarifyCode(userName)
+            .switchIfEmpty(
+                Mono.error(
+                    new VarifyCodeMismatchException(
+                        format("Varify code of user: %s not exist or expired!", userName)
+                    )
+                )
+            )
             .flatMap((varifyCode) -> {
                 log.info(
                     "Varify code from input: {}, varify code from redis: {}",
@@ -164,24 +165,31 @@ public class LoginAuthServiceImpl implements LoginAuthService
      * 当其他验证都完毕后，
      * 为这个登录用户生成一个 JWT。
      */
-    private String
-    generateJWTToken(@NotNull UserWithRoles user)
+    private Mono<String>
+    generateJWTToken(@NotNull UserDetails user)
     {
         SecretKey key
             = Keys.hmacShaKeyFor(projectProperties.getJwtSecretKey().getBytes());
 
-        long expiration =
-            Long.parseLong(this.projectProperties.getJwtExpiration()) * 1000L;
+        long expirationSeconds =
+            Long.parseLong(this.projectProperties.getJwtExpiration());
 
-        Map<String, Set<String>> claims = new HashMap<>();
-        claims.put("roles", user.getRoles());
+       List<String> claims =
+            user.getAuthorities()
+                .stream()
+                .map(a ->
+                    a.getAuthority().replaceFirst("^ROLE_", ""))
+                .collect(Collectors.toList());
 
-        return Jwts.builder()
-                   .subject(user.getUserName())
-                   .claims(claims)
-                   .issuedAt(Date.from(Instant.now()))
-                   .expiration(Date.from(Instant.now().plusMillis(expiration)))
-                   .signWith(key)
-                   .compact();
+        return Mono.just(
+                Jwts.builder()
+                    .subject(user.getUsername())
+                    .claim("roles", claims)
+                    .issuedAt(Date.from(Instant.now()))
+                    .issuer("JesseZ332623")
+                    .expiration(Date.from(Instant.now().plusSeconds(expirationSeconds)))
+                    .signWith(key)
+                    .compact()
+        );
     }
 }
