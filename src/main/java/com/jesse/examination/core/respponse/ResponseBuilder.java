@@ -3,6 +3,7 @@ package com.jesse.examination.core.respponse;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.http.HttpHeaders;
@@ -21,6 +22,7 @@ import java.util.function.Consumer;
 /** HTTP 通用响应构建器。*/
 @Slf4j
 @Component
+@Accessors(chain = true)
 public class ResponseBuilder
 {
     /**
