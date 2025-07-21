@@ -74,8 +74,7 @@ public class QuestionRedisServiceImpl implements QuestionRedisService
                            (isExist)
                                ? this.hashOperations
                                      .increment(
-                                         key, String.valueOf(questionId), 1L
-                                     )
+                                         key, String.valueOf(questionId), 1L)
                                     .timeout(Duration.ofSeconds(3L))
                                     .onErrorResume((exception) ->
                                         redisGenericErrorHandel(exception, -1L)
