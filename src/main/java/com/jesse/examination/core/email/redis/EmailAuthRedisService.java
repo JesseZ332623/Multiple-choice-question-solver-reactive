@@ -5,7 +5,6 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
-import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 
@@ -15,7 +14,6 @@ import static com.jesse.examination.core.redis.keys.ProjectRedisKey.SERVICE_AUTH
 
 /** 邮箱服务授权码服务类。*/
 @Slf4j
-@Component
 public class EmailAuthRedisService
 {
     @Autowired
