@@ -7,7 +7,6 @@ import com.jesse.examination.core.email.utils.VarifyCodeGenerator;
 import com.jesse.examination.core.properties.ProjectProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
-import org.jetbrains.annotations.NotNull;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -17,7 +16,6 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.time.Duration;
-import java.util.AbstractMap;
 
 import static com.jesse.examination.core.redis.keys.ProjectRedisKey.ENTERPRISE_EMAIL_ADDRESS;
 import static com.jesse.examination.core.redis.keys.ProjectRedisKey.SERVICE_AUTH_CODE;
@@ -74,32 +72,31 @@ public class EmailSendTest
     @Test
     public void EmailSenderTest()
     {
-        Mono<AbstractMap.SimpleEntry<Boolean, String>> sendEmailStream
+        Mono<Void> sendEmailStream
             = VarifyCodeGenerator.generateVarifyCode(
-                Integer.parseInt(this.projectProperties.getVarifyCodeLength())
-            ).flatMap((code) -> {
+                Integer.parseInt(this.projectProperties.getVarifyCodeLength()))
+            .flatMap((code) -> {
+                final String userName  = "Jesse";
+                final String userEmail = "zhj3191955858@gmail.com";
                 // 尝试发送邮件
                 return this.emailSender
                            .sendEmail(EmailContent.fromVarify(
-                               "Jesse",
-                               "zhj3191955858@gmail.com",
-                               code,
+                               userName, userEmail, code,
                                Duration.ofMinutes(
-                                    Long.parseLong(this.projectProperties.getVarifyCodeExpiration()) / 60
+                                    Long.parseLong(
+                                        this.projectProperties.getVarifyCodeExpiration()) / 60
                                )
-                           )
-                    )
+                           ))
                     .doOnSuccess((res) ->
                         log.info(
-                            EMAIL_SENDER, "[{}, {}].",
-                            res.getKey(), res.getValue()
+                            EMAIL_SENDER,
+                            "Send email to {}, {} success!",
+                            userName, userEmail
                         )
                     );
             }
         );
 
-        StepVerifier.create(sendEmailStream)
-            .expectNextMatches(AbstractMap.SimpleEntry::getKey)
-            .verifyComplete();
+        StepVerifier.create(sendEmailStream).verifyComplete();
     }
 }
