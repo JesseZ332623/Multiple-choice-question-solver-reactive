@@ -152,7 +152,9 @@ public class UserRedisServiceImpl implements UserRedisService
                     .flatMap((isExist) ->
                        (!isExist)
                         ? redisGenericErrorHandel(
-                            new IllegalArgumentException(), null)
+                            new IllegalArgumentException(
+                                format("Varify code of user: %s not exist or expired!", userName)
+                            ), null)
                         : this.redisTemplate.opsForValue()
                               .get(varifyCodeKey)
                               .map((res) -> (String) res)
