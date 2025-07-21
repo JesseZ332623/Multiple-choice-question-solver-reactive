@@ -23,7 +23,6 @@ import javax.mail.internet.MimeMultipart;
 import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.AbstractMap;
 import java.util.Properties;
 import java.util.regex.Pattern;
 
@@ -381,7 +380,7 @@ public class EmailSender implements EmailSenderInterface
      * @return 表示操作是否正确完成的响应式流
      */
     @Override
-    public Mono<AbstractMap.SimpleEntry<Boolean, String>>
+    public Mono<Void>
     sendEmail(@NotNull EmailContent emailContent)
     {
         if (!this.isValidEmail(emailContent.getTo()))
@@ -443,25 +442,23 @@ public class EmailSender implements EmailSenderInterface
                 emailContent,
                 tuple.getT1(), tuple.getT2()
             ))
-            .timeout(Duration.ofSeconds(30))
+            .timeout(Duration.ofSeconds(30L))
             .retryWhen(retryStrategy)
-            .then(
-                Mono.just(
-                    new AbstractMap.SimpleEntry<>(
-                        true, format("Send email to: %s success!", emailContent.getTo()))
-                )
-            )
             .onErrorResume(exception ->
             {
-                log.error(
-                    "Send email to {} finally failed! MAX_ATTEMPT_TIMES = {}. Cause: {}",
-                    emailContent.getTo(), MAX_ATTEMPT_TIMES,
-                    exception.getMessage(), exception
-                );
+                String errorMessage
+                    = format(
+                        "Send email to %s finally failed! MAX_ATTEMPT_TIMES = %d. Cause: %s",
+                        emailContent.getTo(), MAX_ATTEMPT_TIMES,
+                        exception.getMessage()
+                    );
 
-                return Mono.just(
-                    new AbstractMap.SimpleEntry<>(
-                        false, exception.getMessage()
+                log.error(errorMessage, exception);
+
+                return Mono.error(
+                    new EmailException(
+                        EmailException.ErrorType.NETWORK_ISSUE,
+                        errorMessage, exception
                     )
                 );
             });
