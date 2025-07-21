@@ -1,7 +1,8 @@
 package com.jesse.examination.user.utils.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import lombok.*;
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * 为了适应 Java 的泛型，
@@ -9,9 +10,15 @@ import lombok.Getter;
  * 毕竟 {@literal Mono<Byte[]>}
  * 相比起 {@literal Mono<AvatarImageData>} 实在是太古怪了。
  */
-@AllArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 public class AvatarImageData
 {
     @Getter
-    private byte [] avatarBytes;
+    private byte @NotNull [] avatarBytes;
+
+    @Contract("_ -> new")
+    public static @NotNull AvatarImageData
+    fromBytes(byte @NotNull [] bytes) {
+        return new AvatarImageData(bytes);
+    }
 }
