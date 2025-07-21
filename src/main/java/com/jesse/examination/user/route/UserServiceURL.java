@@ -6,7 +6,7 @@ public class UserServiceURL
     private static final String USER_SERVICE_ROOT_URI
         = "/api/user";
 
-    public static final String USER_RIGISTER_URI
+    public static final String USER_REGISTER_URI
         = USER_SERVICE_ROOT_URI + "/register";
 
     public static final String USER_LOGIN_URI
@@ -14,4 +14,10 @@ public class UserServiceURL
 
     public static final String SEND_VARIFY_EMAIL
         = USER_SERVICE_ROOT_URI + "/send_verify_code_email";
+
+    public static final String GET_AVATAR_IMAGE
+        = USER_SERVICE_ROOT_URI + "/get_avatar";
+
+    public static final String SET_AVTAR_IMAGE
+        = USER_SERVICE_ROOT_URI + "/set_avatar";
 }
