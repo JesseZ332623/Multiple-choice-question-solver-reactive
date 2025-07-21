@@ -52,8 +52,8 @@ public class ScoreRecordServiceImpl implements ScoreRecordService
      * 本服务实现通用的错误处理类，
      * 按照不同的异常返回不同的响应体。
      */
-    private Mono<ServerResponse>
-    genericErrorHandle(Mono<ServerResponse> mono)
+    private @NotNull Mono<ServerResponse>
+    genericErrorHandle(@NotNull Mono<ServerResponse> mono)
     {
         return mono.onErrorResume(
             IllegalArgumentException.class,
