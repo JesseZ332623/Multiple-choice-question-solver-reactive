@@ -2,10 +2,9 @@ package com.jesse.examination.core.redis.keys;
 
 import org.jetbrains.annotations.NotNull;
 
-/** 项目中需要用到的所有 Redis 键枚举类。 */
+/** 项目中需要用到的所有 Redis 键枚举类。*/
 public enum ProjectRedisKey implements CharSequence
 {
-
     /**
      * <p>用户数据存储根键</p>
      *
@@ -13,13 +12,13 @@ public enum ProjectRedisKey implements CharSequence
      * <code><pre>
      * user
      *   |—— Jesse
-     *   |      |—— varify_code (String)
+     *   |      |—— verify_code (String)
      *   |      |—— ques_correct_times (HashMap)
      *   |—— Peter
-     *   |      |—— varify_code (String)
+     *   |      |—— verify_code (String)
      *   |      |—— ques_correct_times (HashMap)
      *   |—— Mike
-     *   |      |—— varify_code (String)
+     *   |      |—— verify_code (String)
      *   |      |—— ques_correct_times (HashMap)
      *   |
      *   ......
@@ -36,7 +35,7 @@ public enum ProjectRedisKey implements CharSequence
     QUESTION_CORRECT_TIME("ques-correct-times"),
 
     /** 用户验证码子键。 */
-    VARIFY_CODE("varify-code"),
+    VARIFY_CODE("verify-code"),
 
     /**
      * <p>验证码发起者邮箱 Redis 键。</p>
