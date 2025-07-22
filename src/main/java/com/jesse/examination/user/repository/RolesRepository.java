@@ -14,8 +14,7 @@ public interface RolesRepository
 {
     /** 通过角色名查询整个角色实体。 */
     @Query("SELECT * FROM user_roles WHERE role_name = :roleName")
-    Mono<UserRoles>
-    findRoleByRoleName(
+    Mono<UserRoles> findRoleByRoleName(
         @Param("roleName") String roleName
     );
 
@@ -27,8 +26,7 @@ public interface RolesRepository
             ON user_role_relation.role_id = user_roles.id
             WHERE user_id = :userId
         """)
-    Flux<String>
-    findRolesByUserId(
+    Flux<String> findRolesByUserId(
         @Param("userId") Long userId
     );
 
@@ -39,9 +37,17 @@ public interface RolesRepository
         VALUES(:userId, :roleId)
         """)
     @Modifying
-    Mono<Integer>
-    addNewRole(
-        @Param("user_id") Long userId,
-        @Param("role_id") Long roleId
+    Mono<Integer> addNewRole(
+        @Param("userId") Long userId,
+        @Param("roleId") Long roleId
+    );
+
+    @Query("""
+        DELETE FROM user_role_relation
+        WHERE user_id = :userId
+        """)
+    @Modifying
+    Mono<Integer> deleteRolesByUserId(
+        @Param("userId") Long userId
     );
 }
