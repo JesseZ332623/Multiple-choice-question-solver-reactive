@@ -1,7 +1,7 @@
-package com.jesse.examination.question.entity.Question;
+package com.jesse.examination.question.entity.question;
 
-import com.jesse.examination.question.entity.Option.AnswerOption;
-import com.jesse.examination.question.entity.Option.Option;
+import com.jesse.examination.question.entity.option.AnswerOption;
+import com.jesse.examination.question.entity.option.Option;
 import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Transient;
@@ -10,7 +10,7 @@ import org.springframework.data.relational.core.mapping.Table;
 
 import java.util.List;
 
-/** 问题数据表实体类。 */
+/** 问题数据表实体类。*/
 @Data
 @Table(name = "questions")
 @ToString
