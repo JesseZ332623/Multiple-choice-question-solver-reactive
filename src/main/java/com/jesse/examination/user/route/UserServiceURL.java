@@ -12,6 +12,12 @@ public class UserServiceURL
     public static final String USER_LOGIN_URI
         = USER_SERVICE_ROOT_URI + "/login";
 
+    public static final String USER_MODIFY_URI
+        = USER_SERVICE_ROOT_URI + "/modify";
+
+    public static final String USER_DELETE_URI
+        = USER_SERVICE_ROOT_URI + "/delete";
+
     public static final String SEND_VARIFY_EMAIL
         = USER_SERVICE_ROOT_URI + "/send_verify_code_email";
 
