@@ -3,6 +3,7 @@ package com.jesse.examination.core.file.service.impl;
 import com.jesse.examination.core.file.service.FileTransferService;
 import com.jesse.examination.core.file.exception.FileOperatorException;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -14,11 +15,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Objects;
+import java.util.stream.Stream;
 
 import static java.lang.String.format;
 
-/** 文件操作核心方法实现类。 */
+/** 文件操作核心方法实现类。*/
 @Slf4j
 @Component
 public class FileTransferServiceImpl implements FileTransferService
@@ -170,6 +175,43 @@ public class FileTransferServiceImpl implements FileTransferService
         ).then();
     }
 
+    private @NotNull Mono<Void>
+    cleanAllFileUnderPath(Path filePath)
+    {
+        return Mono.fromCallable(() -> {
+            List<IOException> exceptions = new ArrayList<>();
+
+            try (Stream<Path> paths = Files.walk(filePath))
+            {
+                paths.sorted(Comparator.reverseOrder())
+                     .forEach((path) -> {
+                         try {
+                             Files.delete(path);
+                         }
+                         catch (IOException exception)
+                         {
+                             exceptions.add(exception);
+                             log.error("Delete file: {} failed!", path, exception);
+                         }
+                     });
+            }
+            catch (IOException exception)
+            {
+                exceptions.add(exception);
+                log.error("Delete file: {} failed!", filePath, exception);
+            }
+
+            if (!exceptions.isEmpty()) {
+                throw new FileOperatorException(
+                    format("Failed to delete files under path: %s", filePath),
+                    exceptions.getFirst()
+                );
+            }
+
+            return null;
+        }).subscribeOn(Schedulers.boundedElastic()).then();
+    }
+
     @Override
     public Mono<Void>
     deleteFile(Path filePath, String fileName)
@@ -177,32 +219,38 @@ public class FileTransferServiceImpl implements FileTransferService
         Objects.requireNonNull(filePath, "File path cannot be null!");
         Objects.requireNonNull(fileName, "File name cannot be null!");
 
+        if (fileName.equals("*"))
+        {
+            log.info("Delete all file under path: {}", filePath);
+            return this.cleanAllFileUnderPath(filePath);
+        }
+
         return Mono.fromCallable(() -> {
             Path pullPath
-                = prepareDirectory(filePath).resolve(fileName).normalize();
+                = prepareDirectory(filePath)
+                    .resolve(fileName).normalize();
 
             if (!Files.deleteIfExists(pullPath))
             {
                 throw new FileNotFoundException(
                     format(
-                            "[deleteFile()] File path: %s not exist!",
-                            filePath
+                        "[deleteFile()] File path: %s not exist!",
+                        filePath
                     )
                 );
             }
 
-                return null;
-            }
-        )
+            return null;
+        })
         .subscribeOn(Schedulers.boundedElastic())
         .doOnError((exception) ->
-                log.error(
-                    "[deleteFile()] Delete {} file: {} failed!",
-                    fileName,
-                    getFileExtension(fileName),
-                    exception
-                )
+            log.error(
+                "[deleteFile()] Delete {} file: {} failed!",
+                fileName,
+                getFileExtension(fileName),
+                exception
             )
+        )
         .onErrorResume((exception) ->
             Mono.error(new FileOperatorException(
                 format(
