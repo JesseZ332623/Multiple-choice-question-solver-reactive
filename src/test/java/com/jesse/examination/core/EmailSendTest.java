@@ -3,7 +3,7 @@ package com.jesse.examination.core;
 import com.jesse.examination.core.email.dto.EmailContent;
 import com.jesse.examination.core.email.service.EmailAuthQueryService;
 import com.jesse.examination.core.email.service.EmailSenderInterface;
-import com.jesse.examination.core.email.utils.VarifyCodeGenerator;
+import com.jesse.examination.core.email.utils.VerifyCodeGenerator;
 import com.jesse.examination.core.properties.ProjectProperties;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -73,7 +73,7 @@ public class EmailSendTest
     public void EmailSenderTest()
     {
         Mono<Void> sendEmailStream
-            = VarifyCodeGenerator.generateVarifyCode(
+            = VerifyCodeGenerator.generateVerifyCode(
                 Integer.parseInt(this.projectProperties.getVarifyCodeLength()))
             .flatMap((code) -> {
                 final String userName  = "Jesse";
