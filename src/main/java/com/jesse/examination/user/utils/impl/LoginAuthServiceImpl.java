@@ -1,22 +1,16 @@
 package com.jesse.examination.user.utils.impl;
 
-import com.jesse.examination.core.exception.ResourceNotFoundException;
 import com.jesse.examination.core.properties.ProjectProperties;
 import com.jesse.examination.user.dto.UserLoginDTO;
-import com.jesse.examination.user.redis.UserRedisService;
 import com.jesse.examination.user.utils.LoginAuthService;
-import com.jesse.examination.user.utils.exception.PasswordMissmatchException;
 import com.jesse.examination.user.utils.exception.UserLoginFailedException;
-import com.jesse.examination.user.utils.exception.VarifyCodeMismatchException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.authentication.InsufficientAuthenticationException;
 import org.springframework.security.core.userdetails.ReactiveUserDetailsService;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -37,21 +31,18 @@ public class LoginAuthServiceImpl implements LoginAuthService
     private ReactiveUserDetailsService userDetailsService;
 
     @Autowired
-    private UserRedisService userRedisService;
+    private AuthServiceImpl authService;
 
     @Autowired
     private ProjectProperties projectProperties;
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
-
     @Override
     public Mono<String>
-    userLoginVarifier(@NotNull UserLoginDTO userLoginDTO)
+    userLoginVerifier(@NotNull UserLoginDTO userLoginDTO)
     {
         Mono<Void> checkVarifyCode
-            = this.varifyCodeCheck(
-                userLoginDTO.getUserName(), userLoginDTO.getVarifyCode()
+            = this.authService.verifyCodeCheck(
+                userLoginDTO.getUserName(), userLoginDTO.getVerifyCode()
             );
 
         Mono<UserDetails> getUserDetails
@@ -69,7 +60,7 @@ public class LoginAuthServiceImpl implements LoginAuthService
         Mono<String> checkPasswordAndGenerateJWTToken
             = getUserDetails.flatMap((user) -> {
                       Mono<Void> checkPassword
-                          = this.passwordVarifier(
+                          = this.authService.passwordVerifier(
                               userLoginDTO.getPassword(), user.getPassword()
                           );
 
@@ -97,75 +88,11 @@ public class LoginAuthServiceImpl implements LoginAuthService
                     });
     }
 
-    private @NotNull Mono<Void>
-    passwordVarifier(String rawPassword, String encodedPassword)
-    {
-        return Mono.fromRunnable(
-            () -> {
-                if (!this.passwordEncoder.matches(rawPassword, encodedPassword))
-                {
-                    throw new PasswordMissmatchException(
-                        "Incorrect password! Please try again!"
-                    );
-                }
-            }
-        );
-    }
-
-    private @NotNull Mono<Void>
-    varifyCodeCheck(String userName, String varifyCodeFromInput)
-    {
-        return this.userRedisService.getUserVarifyCode(userName)
-            .switchIfEmpty(
-                Mono.error(
-                    new VarifyCodeMismatchException(
-                        format("Varify code of user: %s not exist or expired!", userName)
-                    )
-                )
-            )
-            .flatMap((varifyCode) -> {
-                log.info(
-                    "Varify code from input: {}, varify code from redis: {}",
-                    varifyCodeFromInput, varifyCode
-                );
-
-                return (!varifyCode.equals(varifyCodeFromInput))
-                    ? Mono.error(new VarifyCodeMismatchException("Incorrect varify code! Please try again!"))
-                    : this.userRedisService.deleteUserVarifyCode(userName).then();
-            });
-    }
-
-    private @NotNull Mono<Void>
-    roleVarifier(String userName, String targetRoleName, Set<String> roles)
-    {
-        return Mono.fromRunnable(
-            () -> {
-                boolean isAdmin = false;
-
-                for (String role : roles)
-                {
-                    if (role.equals(targetRoleName))
-                    {
-                        isAdmin = true;
-                        break;
-                    }
-                }
-
-                if (!isAdmin)
-                {
-                    throw new InsufficientAuthenticationException(
-                        format("User: %s are not admin! Login request rejected!", userName)
-                    );
-                }
-            }
-        );
-    }
-
     /**
      * 当其他验证都完毕后，
      * 为这个登录用户生成一个 JWT。
      */
-    private Mono<String>
+    private @NotNull Mono<String>
     generateJWTToken(@NotNull UserDetails user)
     {
         SecretKey key
