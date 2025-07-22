@@ -14,7 +14,7 @@ import java.nio.file.Paths;
 import static com.jesse.examination.core.logmakers.LogMakers.FILE_OPERATOR;
 
 
-/** 文件传输测试类。 */
+/** 文件传输测试类。*/
 @Slf4j
 @SpringBootTest
 class FileTransferTest
@@ -99,16 +99,16 @@ class FileTransferTest
         Mono<Void> renameDirectoryStream
             = this.fileTransferService
                   .renameDirectory(oldPath, newPath)
-                  .doOnSuccess((ignore) -> {
+                  .doOnSuccess((ignore) ->
                       log.info(
                           FILE_OPERATOR,
                           "[TestDirectoryRename()] Rename path: {} -> {} complete!",
                           oldPath, newPath
-                      );
-                  })
-                 .doOnError((e) -> {
-                     log.error(FILE_OPERATOR, "Opps!", e);
-                 });
+                      )
+                  )
+                 .doOnError((e) ->
+                     log.error(FILE_OPERATOR, "Opps!", e)
+                 );
 
         StepVerifier.create(renameDirectoryStream).verifyComplete();
     }
