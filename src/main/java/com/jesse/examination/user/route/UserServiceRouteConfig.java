@@ -27,6 +27,8 @@ public class UserServiceRouteConfig
                 .POST(USER_LOGIN_URI,    this.userService::userLogin)
                 .POST(SEND_VARIFY_EMAIL, this.userService::sendVarifyCodeEmail)
                 .PUT(SET_AVTAR_IMAGE,    this.userService::setUserAvatarImage)
+                .PUT(USER_MODIFY_URI,    this.userService::modifyUserInfo)
+                .DELETE(USER_DELETE_URI, this.userService::deleteUser)
                 .build();
     }
 }
