@@ -44,7 +44,7 @@ public class UserRedisServiceImpl implements UserRedisService
 
     @Override
     public Mono<Boolean>
-    saveUserVarifyCode(String userName, String varifyCode)
+    saveUserVerifyCode(String userName, String varifyCode)
     {
         if (userName == null || userName.isEmpty())
         {
@@ -98,7 +98,7 @@ public class UserRedisServiceImpl implements UserRedisService
 
     @Override
     public Mono<Boolean>
-    deleteUserVarifyCode(String userName)
+    deleteUserVerifyCode(String userName)
     {
         if (userName == null || userName.isEmpty())
         {
@@ -123,9 +123,10 @@ public class UserRedisServiceImpl implements UserRedisService
                     : redisGenericErrorHandel(
                         new IllegalArgumentException(
                         format(
-                            "Deltete varidy code for %s failed! Cause: Key: %s not exist!",
-                            userName, varifyCodeKey)
-                        ), null
+                            "Delete verify code for %s failed! Cause: Key: %s not exist!",
+                            userName, varifyCodeKey
+                        )
+                    ), null
                 )
             );
     }
