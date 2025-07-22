@@ -16,7 +16,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
-import static com.jesse.examination.core.email.utils.VarifyCodeGenerator.generateVarifyCode;
+import static com.jesse.examination.core.email.utils.VerifyCodeGenerator.generateVerifyCode;
 import static com.jesse.examination.core.logmakers.LogMakers.REDIS_BASIC;
 
 /** Redis 基础操作测试。*/
@@ -44,13 +44,13 @@ public class RedisTest
     {
         Map<String, String> userVarifyCodes = new HashMap<>();
 
-        userVarifyCodes.put("Jesse", generateVarifyCode(8).block());
-        userVarifyCodes.put("Tom", generateVarifyCode(8).block());
-        userVarifyCodes.put("Mike", generateVarifyCode(8).block());
-        userVarifyCodes.put("Lisa", generateVarifyCode(8).block());
-        userVarifyCodes.put("Jerry", generateVarifyCode(8).block());
-        userVarifyCodes.put("Hans", generateVarifyCode(8).block());
-        userVarifyCodes.put("John", generateVarifyCode(8).block());
+        userVarifyCodes.put("Jesse", generateVerifyCode(8).block());
+        userVarifyCodes.put("Tom", generateVerifyCode(8).block());
+        userVarifyCodes.put("Mike", generateVerifyCode(8).block());
+        userVarifyCodes.put("Lisa", generateVerifyCode(8).block());
+        userVarifyCodes.put("Jerry", generateVerifyCode(8).block());
+        userVarifyCodes.put("Hans", generateVerifyCode(8).block());
+        userVarifyCodes.put("John", generateVerifyCode(8).block());
 
         userVarifyCodes.forEach((name, code) ->
         {
