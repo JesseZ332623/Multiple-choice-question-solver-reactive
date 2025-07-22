@@ -21,7 +21,7 @@ public interface UserService
 
     /** 用户修改账户数据服务（用户在修改前需药发送验证码进行再执行修改）。*/
     Mono<ServerResponse>
-    userModifyUserInfo(ServerRequest request);
+    modifyUserInfo(ServerRequest request);
 
     /** 用户删除自己账户的服务。*/
     Mono<ServerResponse>
