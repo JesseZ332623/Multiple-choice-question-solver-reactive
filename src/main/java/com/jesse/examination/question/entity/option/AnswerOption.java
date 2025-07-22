@@ -1,4 +1,4 @@
-package com.jesse.examination.question.entity.Option;
+package com.jesse.examination.question.entity.option;
 
 import lombok.Getter;
 
