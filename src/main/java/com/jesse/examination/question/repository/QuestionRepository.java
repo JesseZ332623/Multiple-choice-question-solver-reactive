@@ -2,13 +2,14 @@ package com.jesse.examination.question.repository;
 
 import com.jesse.examination.question.dto.FullQuestionInfoDTO;
 import com.jesse.examination.question.dto.QuestionWithCorrectDTO;
-import com.jesse.examination.question.entity.Question.Question;
+import com.jesse.examination.question.entity.question.Question;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+/** 问题数据表仓储类。*/
 public interface QuestionRepository
     extends ReactiveCrudRepository<Question, Integer>
 {
