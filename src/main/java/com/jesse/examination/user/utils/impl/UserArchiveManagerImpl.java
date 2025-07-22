@@ -379,13 +379,14 @@ public class UserArchiveManagerImpl implements UserArchiveManager
     public Mono<Void>
     deleteUserArchive(String userName)
     {
-        return Mono.fromCallable(() -> {
-            Mono<Void> correctTimesFileDelete
-                = this.fileTransferService
+        Mono<Void> archiveFilesDelete
+            = this.fileTransferService
                 .deleteFile(
-                    Path.of(this.projectProperties.getDefaultAvatarPath()),
-                    CORRECT_TIMES_FILE_NAME
-                ).onErrorResume((exception) -> {
+                    Path.of(this.projectProperties.getUserArchivePath())
+                        .resolve(userName).normalize(),
+                    "*"
+                )
+                .onErrorResume((exception) -> {
                     log.error(
                         "Delete archive for {} failed! Cause: {}",
                         userName, exception.getMessage(), exception
@@ -401,20 +402,26 @@ public class UserArchiveManagerImpl implements UserArchiveManager
                     );
                 });
 
-            Mono<Void> deleteUserInfo
-                = this.userRedisService
-                      .deleteUserInfo(userName)
-                      .flatMap((isSuccess) ->
-                              (isSuccess)
-                                  ? null
-                                  : Mono.error(
-                                      new UserArchiveOperatorFailedException(
-                                        "Sava correct times map to redis failed!"
-                                      )
-                              )
-                      );
+        Mono<Void> deleteUserInfo
+            = this.userRedisService
+                .deleteUserInfo(userName).then()
+                .onErrorResume((exception) ->
+                {
+                    log.error(
+                        "Sava correct times map to redis failed! Cause: {}",
+                        exception.getMessage()
+                    );
 
-            return correctTimesFileDelete.then(deleteUserInfo);
-        }).then();
+                    return Mono.error(
+                        new UserArchiveOperatorFailedException(
+                            format(
+                                "Sava correct times map to redis failed! Cause: %s",
+                                exception.getMessage()
+                            )
+                        )
+                    );
+                });
+
+        return archiveFilesDelete.then(deleteUserInfo);
     }
 }
