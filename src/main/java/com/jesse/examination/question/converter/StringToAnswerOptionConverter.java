@@ -1,6 +1,6 @@
 package com.jesse.examination.question.converter;
 
-import com.jesse.examination.question.entity.Option.AnswerOption;
+import com.jesse.examination.question.entity.option.AnswerOption;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.data.convert.ReadingConverter;
