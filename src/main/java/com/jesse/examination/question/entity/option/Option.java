@@ -1,11 +1,11 @@
-package com.jesse.examination.question.entity.Option;
+package com.jesse.examination.question.entity.option;
 
 import lombok.*;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
 
-/** 问题选项数据表实体类。 */
+/** 问题选项数据表实体类。*/
 @Data
 @ToString
 @Table(name = "options")
