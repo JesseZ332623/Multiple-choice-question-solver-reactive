@@ -1,5 +1,6 @@
 package com.jesse.examination.user.entity;
 
+import com.jesse.examination.user.dto.UserModifyDTO;
 import com.jesse.examination.user.dto.UserRegistrationDTO;
 import lombok.*;
 import lombok.experimental.Accessors;
@@ -7,6 +8,7 @@ import org.jetbrains.annotations.NotNull;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.relational.core.mapping.Column;
 import org.springframework.data.relational.core.mapping.Table;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
 
@@ -54,5 +56,28 @@ public class UserEntity
                .setRegisterDate(LocalDateTime.now());
 
         return newUser;
+    }
+
+    public static @NotNull UserEntity
+    fromUserModifier(
+        @NotNull UserEntity      oldUserInfo,
+        @NotNull UserModifyDTO   userModifyDTO,
+        @NotNull PasswordEncoder passwordEncoder
+    )
+    {
+        UserEntity modifiedUser = new UserEntity();
+
+        modifiedUser
+            .setUserId(oldUserInfo.getUserId())
+            .setRegisterDate(oldUserInfo.getRegisterDate());
+
+        modifiedUser
+            .setUserName(userModifyDTO.getNewUserName())
+            .setFullName(userModifyDTO.getNewFullName())
+            .setPassword(passwordEncoder.encode(userModifyDTO.getNewPassword()))
+            .setTelephoneNumber(userModifyDTO.getNewTelephoneNumber())
+            .setEmail(userModifyDTO.getNewEmail());
+
+        return modifiedUser;
     }
 }
