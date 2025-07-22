@@ -1,9 +1,9 @@
 package com.jesse.examination.question.dto;
 
-import com.jesse.examination.question.entity.Option.AnswerOption;
+import com.jesse.examination.question.entity.option.AnswerOption;
 import lombok.*;
 
-/** 包含一个问题 + 它的正确答案的 DTO。 */
+/** 包含一个问题 + 它的正确答案的 DTO。*/
 @Data
 @ToString
 @NoArgsConstructor
