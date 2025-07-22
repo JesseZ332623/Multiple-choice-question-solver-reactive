@@ -1,5 +1,7 @@
 package com.jesse.examination.core.email.utils;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import reactor.core.publisher.Mono;
@@ -8,9 +10,10 @@ import java.security.SecureRandom;
 
 import static java.lang.String.format;
 
-/** 验证码生成器。 */
+/** 验证码生成器工具类。*/
 @Slf4j
-public class VarifyCodeGenerator
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+final public class VerifyCodeGenerator
 {
     /**
      * 生成长度为 digits 的验证码并返回。
@@ -21,7 +24,7 @@ public class VarifyCodeGenerator
      *         检查到 digits 为负或者超过最大位数时抛出
      */
     public static @NotNull Mono<String>
-    generateVarifyCode(int digits)
+    generateVerifyCode(int digits)
     {
         if (digits <= 0 || digits >= 20)
         {
