@@ -1,11 +1,11 @@
 package com.jesse.examination.question.dto;
-import com.jesse.examination.question.entity.Option.AnswerOption;
+import com.jesse.examination.question.entity.option.AnswerOption;
 import lombok.*;
 
 import java.util.Map;
 import java.util.TreeMap;
 
-/** 包含一个问题的所有信息的 DTO。 */
+/** 包含一个问题的所有信息的 DTO。*/
 @Data
 @ToString
 @NoArgsConstructor
