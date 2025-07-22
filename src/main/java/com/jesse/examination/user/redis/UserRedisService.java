@@ -15,7 +15,7 @@ public interface UserRedisService
      * </p>
      *
      * <code><pre>
-     * [Key]    user:[userName]:varify-code
+     * [Key]    user:[userName]:verify-code
      * [Value]  (Numeric String)
      * </pre></code>
      *
@@ -25,11 +25,11 @@ public interface UserRedisService
      * @return 是否成功存入 Redis?
      */
     Mono<Boolean>
-    saveUserVarifyCode(String userName, String varifyCode);
+    saveUserVerifyCode(String userName, String varifyCode);
 
     /** 当用户登录的验证码匹配时，删除 Redis 中对应的验证码。*/
     Mono<Boolean>
-    deleteUserVarifyCode(String userName);
+    deleteUserVerifyCode(String userName);
 
     /**
      * <p>
