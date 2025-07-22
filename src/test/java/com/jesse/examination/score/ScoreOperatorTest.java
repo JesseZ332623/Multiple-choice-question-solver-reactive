@@ -17,6 +17,7 @@ import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
@@ -44,8 +45,13 @@ public class ScoreOperatorTest
     void cacheAllIdsList()
     {
         allIdsList =
-            this.userRepository.findAllIds()
-                .collectList().block();
+            this.userRepository
+                .findAllIds()
+                .timeout(Duration.ofSeconds(5L))
+                .collectList()
+                .block();
+
+        log.info("All user_id = {}", allIdsList);
     }
 
     @Contract(" -> new")
@@ -93,6 +99,12 @@ public class ScoreOperatorTest
         final int INSERT_AMOUNT = 500000;
         final int BUFFER_SIZE   = 10000;
         final int PARALLELISM   = 32;    // 根据 DB 连接池调整并发度
+
+        log.info(
+            "Start to generate scores. " +
+            "(INSERT_AMOUNT = {}, BUFFER_SIZE = {}, PARALLELISM = {})",
+            INSERT_AMOUNT, BUFFER_SIZE, PARALLELISM
+        );
 
         /*
          * 设计并行计划：
