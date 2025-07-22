@@ -3,11 +3,15 @@ package com.jesse.examination.user.service.impl;
 import com.jesse.examination.core.email.dto.EmailContent;
 import com.jesse.examination.core.email.exception.EmailException;
 import com.jesse.examination.core.email.service.EmailSenderInterface;
+import com.jesse.examination.core.email.utils.EmailFormatVerifier;
 import com.jesse.examination.core.exception.ResourceNotFoundException;
 import com.jesse.examination.core.properties.ProjectProperties;
 import com.jesse.examination.core.redis.exception.ProjectRedisOperatorException;
 import com.jesse.examination.core.respponse.ResponseBuilder;
+import com.jesse.examination.score.repository.ScoreRecordRepository;
 import com.jesse.examination.user.dto.UserLoginDTO;
+import com.jesse.examination.user.dto.UserDeleteDTO;
+import com.jesse.examination.user.dto.UserModifyDTO;
 import com.jesse.examination.user.dto.UserRegistrationDTO;
 import com.jesse.examination.user.entity.UserEntity;
 import com.jesse.examination.user.exception.DuplicateUserException;
@@ -17,6 +21,7 @@ import com.jesse.examination.user.redis.UserRedisService;
 import com.jesse.examination.user.repository.RolesRepository;
 import com.jesse.examination.user.repository.UserRepository;
 import com.jesse.examination.user.service.UserService;
+import com.jesse.examination.user.utils.AuthService;
 import com.jesse.examination.user.utils.LoginAuthService;
 import com.jesse.examination.user.utils.UserArchiveManager;
 import com.jesse.examination.user.utils.dto.AvatarImageData;
@@ -41,7 +46,7 @@ import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 
-import static com.jesse.examination.core.email.utils.VarifyCodeGenerator.generateVarifyCode;
+import static com.jesse.examination.core.email.utils.VerifyCodeGenerator.generateVerifyCode;
 import static com.jesse.examination.core.respponse.URLParamPrase.praseRequestParam;
 import static com.jesse.examination.user.entity.RoleID.ROLE_USER;
 import static java.lang.String.format;
@@ -56,6 +61,12 @@ public class UserServiceImpl implements UserService
 
     @Autowired
     private RolesRepository rolesRepository;
+
+    @Autowired
+    private ScoreRecordRepository scoreRecordRepository;
+
+    @Autowired
+    private AuthService authService;
 
     @Autowired
     private LoginAuthService loginAuthService;
@@ -96,8 +107,7 @@ public class UserServiceImpl implements UserService
     private static @NotNull Mono<Void>
     nameDuplicateCheck(String name, @NotNull Mono<Boolean> checker)
     {
-        log.info("Check name: {}", name);
-
+        // log.info("Check name: {}", name);
         return checker.flatMap((isDuplicate) ->
         {
             if (isDuplicate)
@@ -221,18 +231,24 @@ public class UserServiceImpl implements UserService
                 final String userName = registerInfo.getUserName();
                 final String fullName = registerInfo.getFullName();
 
-                /* 1. 校验用户名与全名。*/
-                Mono<Void> nameChecks
+                /* 1. 校验用户名、全名以及邮箱格式是否正确。*/
+                Mono<Void> registerInfoChecks
                     = nameDuplicateCheck(
-                    userName,
-                    this.userRepository
-                        .existsByUserName(userName)
-                        .map(isExist -> isExist != 0))
-                    .and(nameDuplicateCheck(
+                        userName,
+                        this.userRepository
+                            .existsByUserName(userName)
+                            .map(isExist -> isExist != 0))
+                    .and(
+                        nameDuplicateCheck(
                             fullName,
-                            this.userRepository.existsByFullName(fullName)
+                            this.userRepository
+                                .existsByFullName(fullName)
                                 .map(isExist -> isExist != 0)
-                        )
+                            )
+                    )
+                    .and(
+                        EmailFormatVerifier
+                            .isValidEmail(registerInfo.getEmail())
                     );
 
                 /* 2. 创建新用户实体和对应角色并存入数据库。*/
@@ -245,7 +261,8 @@ public class UserServiceImpl implements UserService
                             registerInfo.setPassword(encodedPassword); // 设置完成加密的密码
 
                             // 正式写入用户和角色的数据
-                            return this.userRepository.save(UserEntity.fromUserRegistrationDTO(registerInfo))
+                            return this.userRepository
+                                .save(UserEntity.fromUserRegistrationDTO(registerInfo))
                                 .flatMap((newUser) ->
                                     this.rolesRepository
                                         .addNewRole(newUser.getUserId(), ROLE_USER.getRoleId())
@@ -255,11 +272,12 @@ public class UserServiceImpl implements UserService
                 /* 创建新用户存档。*/
                 Mono<Void> createNewUserArchive
                     = this.userArchiveManager
-                    .createNewArchiveForNewUser(registerInfo.getUserName());
+                          .createNewArchiveForNewUser(registerInfo.getUserName());
 
                 /* 将创建新用户的整个动作，包装在一个事务内。*/
                 return this.transactionalOperator.transactional(
-                    nameChecks.then(createNewUser)
+                    registerInfoChecks
+                        .then(createNewUser)
                         .then(createNewUserArchive)
                         .timeout(Duration.ofSeconds(5L))
                         .then(
@@ -274,6 +292,11 @@ public class UserServiceImpl implements UserService
                             // 注意异常处理的优先级（先处理业务特定异常，再处理通用异常）
                             (exception) -> {
                                 if (exception instanceof DuplicateUserException)
+                                {
+                                    return this.responseBuilder
+                                               .BAD_REQUEST(exception.getMessage(), exception);
+                                }
+                                else if (exception instanceof EmailException)
                                 {
                                     return this.responseBuilder
                                                .BAD_REQUEST(exception.getMessage(), exception);
@@ -315,7 +338,7 @@ public class UserServiceImpl implements UserService
             .switchIfEmpty(
                 Mono.error(new EmptyRequestDataException("Login data not be empty!")))
             .flatMap((loginInfo) ->
-                this.loginAuthService.userLoginVarifier(loginInfo)
+                this.loginAuthService.userLoginVerifier(loginInfo)
                     .flatMap((jwt) -> {
                         // 加载用户存档
                         Mono<Void> readArchive
@@ -335,23 +358,269 @@ public class UserServiceImpl implements UserService
             ).onErrorResume(this::genericErrorHandle);
     }
 
+    /**
+     * 用户登出服务。
+     * 要做的也很简单，从请求中获取用户名参数，
+     * 检查该用户名是否存在后，再进行登出操作（将 Redis 中的用户存档存回文件系统）。
+     */
     @Override
     public Mono<ServerResponse>
     userLogout(ServerRequest request)
     {
-        return null;
+        return praseRequestParam(request, "name")
+                .flatMap((userName) ->
+                    this.userRepository.existsByUserName(userName)
+                        .map(res -> res != 0)
+                        .flatMap((isExist) ->
+                            (isExist)
+                                ? this.userArchiveManager
+                                      .saveUserArchive(userName)
+                                      .then(
+                                          this.responseBuilder
+                                              .OK(null,
+                                                  format("User %s log out!", userName),
+                                                  null, null
+                                              )
+                                      )
+                                : Mono.error(
+                                    new IllegalArgumentException(
+                                        format(
+                                            "Log out failed! Cause: user %s not exist!",
+                                            userName)
+                                        )
+                                    )
+                            )
+                ).onErrorResume(this::genericErrorHandle);
+    }
+
+    private @NotNull Mono<Void>
+    doUserModify(@NotNull UserModifyDTO modifyInfo, @NotNull UserEntity oldUserInfo)
+    {
+        String newUserName = modifyInfo.getNewUserName();
+        String newFullName = modifyInfo.getNewFullName();
+
+        /* 检查用户名是否重复。*/
+        Mono<Void> checkUserName
+            = Mono.fromCallable(() -> {
+                if (!oldUserInfo.getUserName().equals(newUserName))
+                {
+                    return nameDuplicateCheck(
+                        newUserName,
+                        this.userRepository
+                            .existsByUserName(newUserName)
+                            .map((res) -> res != 0)
+                    );
+                }
+
+                return Mono.empty();
+            }).then();
+
+        /* 检查全名是否重复。*/
+        Mono<Void> checkFullName
+            = Mono.fromCallable(() -> {
+            if (!oldUserInfo.getFullName().equals(newFullName))
+            {
+                return nameDuplicateCheck(
+                    newFullName,
+                    this.userRepository
+                        .existsByUserName(newFullName)
+                        .map((res) -> res != 0)
+                );
+            }
+
+            return Mono.empty();
+        }).then();
+
+        /* 检查密码是否正确。*/
+        Mono<Void> checkPassword
+            = this.authService.passwordVerifier(
+                modifyInfo.getOldPassword(),
+                oldUserInfo.getPassword()
+            );
+
+        /* 往数据库写入新的用户信息。*/
+        Mono<Void> saveUserData
+            = this.userRepository
+                  .save(
+                      UserEntity.fromUserModifier(
+                          oldUserInfo, modifyInfo,
+                          this.passwordEncoder
+                      )
+                  ).then();
+
+        /* 存档用户数据。*/
+        Mono<Void> saveArchive
+            = this.userArchiveManager
+            .saveUserArchive(modifyInfo.getOldUserName());
+
+        /* 修改用户存档名。*/
+        Mono<Void> renameUserArchive
+            = this.userArchiveManager
+                  .renameUserArchiveDir(
+                      oldUserInfo.getUserName(),
+                      modifyInfo.getNewUserName()
+                  );
+
+        return checkUserName
+                .then(checkFullName)
+                .then(checkPassword)
+                .then(saveUserData)
+                .then(saveArchive)
+                .then(renameUserArchive);
     }
 
     @Override
     public Mono<ServerResponse>
-    userModifyUserInfo(ServerRequest request) {
+    modifyUserInfo(@NotNull ServerRequest request)
+    {
+        request.bodyToMono(UserModifyDTO.class)
+            .switchIfEmpty(
+                Mono.error(new EmptyRequestDataException("Modify data not be empty!")))
+            .flatMap((modifyInfo) ->
+                this.userRepository
+                    .findUserByUserName(modifyInfo.getOldUserName())
+                    .switchIfEmpty(
+                        Mono.error(
+                            new ResourceNotFoundException(
+                                format("User: %s not exist!", modifyInfo.getOldUserName())
+                            )
+                        )
+                    )
+                    .flatMap((oldUserInfo) ->
+                        this.doUserModify(modifyInfo, oldUserInfo)
+                            .then(this.responseBuilder.OK(
+                                null,
+                                format(
+                                    "User modify complete, "      +
+                                    "your new user name is: %s, " +
+                                    "please login again!", modifyInfo.getNewUserName()
+                                ), null, null
+                            ))
+                    )
+            ).onErrorResume(this::genericErrorHandle);
+
         return null;
+    }
+
+    /**
+     * deleteUser() 辅助函数，
+     * 在检查到数据库确实存在用户数据时，
+     * 正式执行用户的删除操作，共分为以下几个操作：
+     *
+     * <ol>
+     *     <li>检查用户输入的密码是否正确</li>
+     *     <li>检查用户输入的验证码是否正确</li>
+     *     <li>删除用户的存档（文件系统 + Redis 数据库的数据）</li>
+     *     <li>删除数据库中用户的所有成绩、角色和用户数据本身（三个操作放在一个事务内执行）</li>
+     * </ol>
+     */
+    private @NotNull Mono<ServerResponse>
+    doUserDelete(@NotNull UserDeleteDTO deleteInfo)
+    {
+        Mono<Void> checkPassword
+            = this.userRepository
+            .findUserByUserName(deleteInfo.getUserName())
+            .map((user) ->
+                this.passwordEncoder
+                    .matches(deleteInfo.getPassword(), user.getPassword())
+            )
+            .flatMap((isMatch) -> {
+                if (!isMatch)
+                {
+                    return Mono.error(
+                        new IllegalArgumentException(
+                            "Password code mismatch! Please try again!"
+                        )
+                    );
+                }
+
+                return Mono.empty();
+            });
+
+        Mono<Void> checkVarifyCode
+            = this.userRedisService
+                  .getUserVarifyCode(deleteInfo.getUserName())
+                  .map((varifyCodeFromRedis) ->
+                      varifyCodeFromRedis.equals(deleteInfo.getVarifyCode()))
+                  .flatMap((isMatch) -> {
+                      if (!isMatch) {
+                          return Mono.error(
+                              new IllegalArgumentException("Varify code mismatch! Please try again!")
+                          );
+                      }
+
+                      return Mono.empty();
+                  });
+
+        Mono<Void> deleteUserArchive
+            = this.userArchiveManager
+                  .deleteUserArchive(deleteInfo.getUserName());
+
+        Mono<Void> deleteUserFromDataBase
+            = this.userRepository
+                  .findIdByUserName(deleteInfo.getUserName())
+                  .flatMap((userId) -> {
+                      Mono<Void> deleteAllScoreForUser
+                          = this.scoreRecordRepository
+                                .deleteAllScoreRecordByUserName(userId)
+                                .then();
+
+                      Mono<Void> deleteRolesForUser
+                          = this.rolesRepository
+                                .deleteRolesByUserId(userId)
+                                .then();
+
+                      Mono<Void> deleteUser
+                          = this.userRepository.deleteById(userId);
+
+                      return this.transactionalOperator
+                          .transactional(
+                              deleteAllScoreForUser
+                                  .then(deleteRolesForUser)
+                                  .then(deleteUser)
+                          );
+                  });
+
+        return checkPassword.then(checkVarifyCode)
+            .then(deleteUserArchive)
+            .then(deleteUserFromDataBase)
+            .timeout(Duration.ofSeconds(10L))
+            .then(
+                this.responseBuilder.OK(
+                    null,
+                    format(
+                        "Delete user: %s success! Bye!",
+                        deleteInfo.getUserName()
+                    ), null, null
+                )
+            )
+            .onErrorResume(this::genericErrorHandle);
     }
 
     @Override
     public Mono<ServerResponse>
-    deleteUser(ServerRequest request) {
-        return null;
+    deleteUser(@NotNull ServerRequest request)
+    {
+        return request.bodyToMono(UserDeleteDTO.class)
+                .switchIfEmpty(
+                    Mono.error(new EmptyRequestDataException("User delete data not be empty!")))
+               .flatMap((deleteInfo) ->
+                   this.userRepository
+                       .existsByUserName(deleteInfo.getUserName())
+                       .map((res) -> res != 0)
+                       .flatMap((isExist) ->
+                           (isExist)
+                                ? doUserDelete(deleteInfo)
+                                : this.genericErrorHandle(
+                                    new IllegalArgumentException(
+                                        format(
+                                            "Delete user failed! Cause: user %s not exist!",
+                                            deleteInfo.getUserName()
+                                       )
+                                   )
+                           )
+                       )
+               );
     }
 
     /**
@@ -393,7 +662,7 @@ public class UserServiceImpl implements UserService
     private @NotNull Mono<String>
     sendVarifyCodeEmail(String userName, String userEmail)
     {
-        return generateVarifyCode(
+        return generateVerifyCode(
             Integer.parseInt(
                 this.projectProperties.getVarifyCodeLength()))
         .flatMap((varifyCode) ->
@@ -427,7 +696,7 @@ public class UserServiceImpl implements UserService
     saveVarifyCodeToRedis(String userName, String varifyCode)
     {
         return this.userRedisService
-                   .saveUserVarifyCode(userName, varifyCode);
+                   .saveUserVerifyCode(userName, varifyCode);
     }
 
     /**
@@ -458,12 +727,7 @@ public class UserServiceImpl implements UserService
                                     ))
                     )
             ).onErrorResume((exception) -> {
-                if (exception instanceof IllegalArgumentException)
-                {
-                    return this.responseBuilder
-                               .BAD_REQUEST(exception.getMessage(), exception);
-                }
-                else if (exception instanceof EmailException)
+                if (exception instanceof EmailException)
                 {
                     return this.responseBuilder
                                .INTERNAL_SERVER_ERROR(exception.getMessage(), exception);
