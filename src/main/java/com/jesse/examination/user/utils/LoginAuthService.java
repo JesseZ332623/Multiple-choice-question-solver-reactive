@@ -11,5 +11,5 @@ public interface LoginAuthService
      * 验证用户提交表单的所有数据，并返回 JWT 字符串。
      */
     Mono<String>
-    userLoginVarifier(UserLoginDTO userLoginDTO);
+    userLoginVerifier(UserLoginDTO userLoginDTO);
 }
