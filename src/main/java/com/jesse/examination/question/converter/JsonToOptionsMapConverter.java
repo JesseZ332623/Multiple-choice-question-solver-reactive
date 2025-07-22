@@ -5,15 +5,13 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.core.convert.converter.Converter;
-import com.jesse.examination.question.entity.Option.AnswerOption;
+import com.jesse.examination.question.entity.option.AnswerOption;
 import org.springframework.data.convert.ReadingConverter;
 
 import java.util.Map;
 import java.util.TreeMap;
 
-/**
- * 将一个 JSON 字符串转换成 {@literal Map<AnswerOption, String>} 的映射表的转换器。
- */
+/** 将一个 JSON 字符串转换成 {@literal Map<AnswerOption, String>} 的映射表的转换器。*/
 @ReadingConverter
 public class JsonToOptionsMapConverter
     implements Converter<String, Map<AnswerOption, String>>
