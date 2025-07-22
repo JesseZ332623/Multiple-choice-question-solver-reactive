@@ -1,13 +1,14 @@
 package com.jesse.examination.question.repository;
 
-import com.jesse.examination.question.entity.Option.AnswerOption;
-import com.jesse.examination.question.entity.Option.Option;
+import com.jesse.examination.question.entity.option.AnswerOption;
+import com.jesse.examination.question.entity.option.Option;
 import org.springframework.data.r2dbc.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.repository.reactive.ReactiveCrudRepository;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+/** 问题选项数据表仓储类。*/
 public interface OptionRepository
     extends ReactiveCrudRepository<Option, Long>
 {
