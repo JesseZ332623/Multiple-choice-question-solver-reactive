@@ -7,7 +7,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.annotation.method.configuration.EnableReactiveMethodSecurity;
@@ -70,7 +69,7 @@ public class WebSecurityConfig
         return new BCryptPasswordEncoder();
     }
 
-    /** 响应式 JWT（Json Web Token）的解码器构建 */
+    /** 响应式 JWT（Json Web Token）的解码器构建。*/
     @Bean
     public ReactiveJwtDecoder reactiveJwtDecoder()
     {
@@ -102,16 +101,17 @@ public class WebSecurityConfig
             )
             /* 对于不同的 API，划定不同的权限（目前处于开发阶段，暂时放行所有 /api/ 下的请求）。 */
             .authorizeExchange((exchange) ->
-                exchange.pathMatchers(HttpMethod.GET, "/api/public/**").permitAll()
-                        .pathMatchers(HttpMethod.POST, "api/user/register").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/api/admin/login").permitAll()
-                        .pathMatchers(HttpMethod.POST, "/api/user/login").permitAll()
-                        .pathMatchers(HttpMethod.POST, "api/user/send_verify_code_email").permitAll()
-                        .pathMatchers("/api/admin/**").hasRole("ADMIN")
-                        .pathMatchers("/api/user/**").hasAnyRole("USER", "ADMIN")
-                        .pathMatchers("/api/question/**").hasAnyRole("USER", "ADMIN")
-                        .pathMatchers("/api/score/**").hasAnyRole("USER", "ADMIN")
-                        .anyExchange().denyAll()    // 若发起上述 API 之外的请求，通通拒绝
+//                exchange.pathMatchers(HttpMethod.GET, "/api/public/**").permitAll()
+//                        .pathMatchers(HttpMethod.POST, "api/user/register").permitAll()
+//                        .pathMatchers(HttpMethod.POST, "/api/admin/login").permitAll()
+//                        .pathMatchers(HttpMethod.POST, "/api/user/login").permitAll()
+//                        .pathMatchers(HttpMethod.POST, "api/user/send_verify_code_email").permitAll()
+//                        .pathMatchers("/api/admin/**").hasRole("ADMIN")
+//                        .pathMatchers("/api/user/**").hasAnyRole("USER", "ADMIN")
+//                        .pathMatchers("/api/question/**").hasAnyRole("USER", "ADMIN")
+//                        .pathMatchers("/api/score/**").hasAnyRole("USER", "ADMIN")
+//                        .anyExchange().denyAll()    // 若发起上述 API 之外的请求，通通拒绝
+                exchange.pathMatchers("/api/**").permitAll()
             )
             .oauth2ResourceServer((oauth2) ->
                 oauth2.jwt(
