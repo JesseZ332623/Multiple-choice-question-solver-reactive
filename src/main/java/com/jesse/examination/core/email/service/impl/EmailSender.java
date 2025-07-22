@@ -4,6 +4,7 @@ package com.jesse.examination.core.email.service.impl;
 import com.jesse.examination.core.email.dto.EmailContent;
 import com.jesse.examination.core.email.exception.EmailException;
 import com.jesse.examination.core.email.service.EmailSenderInterface;
+import com.jesse.examination.core.email.utils.EmailFormatVerifier;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -24,7 +25,6 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Properties;
-import java.util.regex.Pattern;
 
 import static com.jesse.examination.core.redis.keys.ProjectRedisKey.ENTERPRISE_EMAIL_ADDRESS;
 import static com.jesse.examination.core.redis.keys.ProjectRedisKey.SERVICE_AUTH_CODE;
@@ -232,19 +232,6 @@ public class EmailSender implements EmailSenderInterface
     }
 
     /**
-     * 验证一个邮箱是否符合标准的邮箱格式，我所用的正则表达式是：
-     * ^[a-zA-Z0-9._%+-]+@(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$
-     */
-    private boolean
-    isValidEmail(String email)
-    {
-        return Pattern.matches(
-            "^[a-zA-Z0-9._%+-]+@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,}$",
-            email
-        );
-    }
-
-    /**
      * 检查在发送邮件过程中所抛出的异常，
      * 是否有重发邮件的必要？
      */
@@ -383,16 +370,6 @@ public class EmailSender implements EmailSenderInterface
     public Mono<Void>
     sendEmail(@NotNull EmailContent emailContent)
     {
-        if (!this.isValidEmail(emailContent.getTo()))
-        {
-            return Mono.error(
-                new EmailException(
-                    EmailException.ErrorType.INVALID_CONTENT,
-                    "Invalid email format!", null
-                )
-            );
-        }
-
         /*
          * 对于邮件发送过程中因为网络波动而出现的失败，
          * 有比固定时间重试（fixedDelay()）更好的策略，即指数退避。
@@ -429,38 +406,43 @@ public class EmailSender implements EmailSenderInterface
                         );
                    });
 
-        return this.getEmailPublisherInfo()
-            .switchIfEmpty(
-                Mono.error(
-                    new EmailException(
-                        EmailException.ErrorType.CONFIG_MISSING,
-                        "Missing email publisher info!", null
+        return EmailFormatVerifier
+            .isValidEmail(emailContent.getTo()).then(
+                this.getEmailPublisherInfo()
+                    .switchIfEmpty(
+                        Mono.error(
+                            new EmailException(
+                                EmailException.ErrorType.CONFIG_MISSING,
+                                "Missing email publisher info!", null
+                            )
+                        )
                     )
-                )
-            )
-            .flatMap(tuple -> this.sendEmailReactive(
-                emailContent,
-                tuple.getT1(), tuple.getT2()
-            ))
-            .timeout(Duration.ofSeconds(30L))
-            .retryWhen(retryStrategy)
-            .onErrorResume(exception ->
-            {
-                String errorMessage
-                    = format(
-                        "Send email to %s finally failed! MAX_ATTEMPT_TIMES = %d. Cause: %s",
-                        emailContent.getTo(), MAX_ATTEMPT_TIMES,
-                        exception.getMessage()
-                    );
-
-                log.error(errorMessage, exception);
-
-                return Mono.error(
-                    new EmailException(
-                        EmailException.ErrorType.NETWORK_ISSUE,
-                        errorMessage, exception
+                    .flatMap(tuple ->
+                        this.sendEmailReactive(
+                            emailContent,
+                            tuple.getT1(), tuple.getT2()
+                        )
                     )
-                );
-            });
+                    .timeout(Duration.ofSeconds(30L))
+                    .retryWhen(retryStrategy)
+                    .onErrorResume(exception ->
+                    {
+                        String errorMessage
+                            = format(
+                            "Send email to %s finally failed! MAX_ATTEMPT_TIMES = %d. Cause: %s",
+                            emailContent.getTo(), MAX_ATTEMPT_TIMES,
+                            exception.getMessage()
+                        );
+
+                        log.error(errorMessage, exception);
+
+                        return Mono.error(
+                            new EmailException(
+                                EmailException.ErrorType.NETWORK_ISSUE,
+                                errorMessage, exception
+                            )
+                        );
+                    })
+            );
     }
 }
