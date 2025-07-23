@@ -25,7 +25,7 @@ public class UserServiceRouteConfig
                 .GET(GET_AVATAR_IMAGE,   this.userService::getUserAvatarImage)
                 .POST(USER_REGISTER_URI, this.userService::userRegister)
                 .POST(USER_LOGIN_URI,    this.userService::userLogin)
-                .POST(USER_LOGOUT_URI, this.userService::userLogout)
+                .POST(USER_LOGOUT_URI,   this.userService::userLogout)
                 .POST(SEND_VARIFY_EMAIL, this.userService::sendVarifyCodeEmail)
                 .PUT(SET_AVTAR_IMAGE,    this.userService::setUserAvatarImage)
                 .PUT(USER_MODIFY_URI,    this.userService::modifyUserInfo)
