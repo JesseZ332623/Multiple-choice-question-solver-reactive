@@ -17,4 +17,15 @@ public class UserDeleteDTO
     private String password;
 
     private String varifyCode;
+
+    public static UserDeleteDTO
+    of (String name, String pass, String verify)
+    {
+        UserDeleteDTO userDelete
+            = new UserDeleteDTO();
+
+        return userDelete.setUserName(name)
+                    .setPassword(pass)
+                    .setVarifyCode(verify);
+    }
 }
