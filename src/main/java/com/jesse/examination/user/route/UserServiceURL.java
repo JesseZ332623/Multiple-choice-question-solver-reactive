@@ -12,6 +12,9 @@ public class UserServiceURL
     public static final String USER_LOGIN_URI
         = USER_SERVICE_ROOT_URI + "/login";
 
+    public static final String USER_LOGOUT_URI
+        = USER_SERVICE_ROOT_URI + "/logout";
+
     public static final String USER_MODIFY_URI
         = USER_SERVICE_ROOT_URI + "/modify";
 
