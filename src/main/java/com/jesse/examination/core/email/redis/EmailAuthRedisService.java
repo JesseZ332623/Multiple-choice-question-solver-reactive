@@ -5,6 +5,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 
@@ -14,6 +15,7 @@ import static com.jesse.examination.core.redis.keys.ProjectRedisKey.SERVICE_AUTH
 
 /** 邮箱服务授权码服务类。*/
 @Slf4j
+@Service
 public class EmailAuthRedisService
 {
     @Autowired
@@ -27,7 +29,7 @@ public class EmailAuthRedisService
      * 将邮箱发送人的邮箱号和服务授权码读出，按指定 key 存入 Redis（自动执行）。
      */
     @PostConstruct
-    private void readEmailPublisherInfo()
+    public void readEmailPublisherInfo()
     {
         this.emailAuthQueryService
             .findEmailPublisherInfoById(1)
