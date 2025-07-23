@@ -1,6 +1,7 @@
 package com.jesse.examination.core.respponse;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.AccessLevel;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
@@ -23,7 +24,8 @@ import java.util.function.Consumer;
 @Slf4j
 @Component
 @Accessors(chain = true)
-public class ResponseBuilder
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+final public class ResponseBuilder
 {
     /**
      * 响应体静态模板类。
