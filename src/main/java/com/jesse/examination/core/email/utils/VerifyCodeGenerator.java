@@ -54,8 +54,6 @@ final public class VerifyCodeGenerator
 
                 return String.valueOf(buffer);
             }
-        ).doOnSuccess((ignore) ->
-            log.info("Send varify code complete! Digits = {}.", digits)
         );
     }
 }
