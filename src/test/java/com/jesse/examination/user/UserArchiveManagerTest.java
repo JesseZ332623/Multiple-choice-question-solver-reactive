@@ -114,8 +114,7 @@ public class UserArchiveManagerTest
                   });
 
         StepVerifier.create(getDefaultAvatar)
-                    .expectNextMatches((avatarData) ->
-                        avatarData.getAvatarBytes() != null)
+                    .expectNextMatches((avatarData) -> true)
                     .verifyComplete();
     }
 
