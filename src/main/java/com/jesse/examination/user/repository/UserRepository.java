@@ -12,9 +12,16 @@ import reactor.core.publisher.Mono;
 public interface UserRepository
     extends ReactiveCrudRepository<UserEntity, Long>
 {
+    /** 返回表中用户最大的 ID。*/
+    @Query(" SELECT MAX(user_id) FROM users")
+    Mono<Long> findMaxUserId();
+
     /** 返回表中所有的用户 ID。*/
     @Query("SELECT user_id FROM users")
     Flux<Long> findAllIds();
+
+    @Query("SELECT user_name FROM users")
+    Flux<String> findAllUserName();
 
     /** 根据用户名查询对应的用户 ID。*/
     @Query("""
@@ -88,4 +95,9 @@ public interface UserRepository
     deleteUserByUserName(
         @Param("userName") String userName
     );
+
+    /** 将用户表的 id 自增重设为 1。（一般是测试结束后用）*/
+    @Modifying
+    @Query("ALTER TABLE users AUTO_INCREMENT = 1")
+    Mono<Void> resumeAutoIncrement();
 }
