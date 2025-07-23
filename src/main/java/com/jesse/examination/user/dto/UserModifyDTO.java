@@ -1,9 +1,6 @@
 package com.jesse.examination.user.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.ToString;
+import lombok.*;
 import lombok.experimental.Accessors;
 
 /** 用户修改自己账户信息时所用的 DTO。*/
@@ -11,14 +8,14 @@ import lombok.experimental.Accessors;
 @ToString
 @Accessors(chain = true)
 @EqualsAndHashCode
-@AllArgsConstructor
+@NoArgsConstructor
 public class UserModifyDTO
 {
     private String oldUserName;            // 旧用户名
+
+    private String newUserName;            // 新用户名
     
     private String oldPassword;            // 旧密码
-    
-    private String newUserName;            // 新用户名
 
     private String newPassword;            // 新用户密码
 
