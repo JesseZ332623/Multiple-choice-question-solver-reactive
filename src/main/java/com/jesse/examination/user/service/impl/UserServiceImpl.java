@@ -394,7 +394,10 @@ public class UserServiceImpl implements UserService
     }
 
     private @NotNull Mono<Void>
-    doUserModify(@NotNull UserModifyDTO modifyInfo, @NotNull UserEntity oldUserInfo)
+    doUserModify(
+        @NotNull UserModifyDTO modifyInfo,
+        @NotNull UserEntity    oldUserInfo
+    )
     {
         String newUserName = modifyInfo.getNewUserName();
         String newFullName = modifyInfo.getNewFullName();
@@ -473,7 +476,7 @@ public class UserServiceImpl implements UserService
     public Mono<ServerResponse>
     modifyUserInfo(@NotNull ServerRequest request)
     {
-        request.bodyToMono(UserModifyDTO.class)
+        return request.bodyToMono(UserModifyDTO.class)
             .switchIfEmpty(
                 Mono.error(new EmptyRequestDataException("Modify data not be empty!")))
             .flatMap((modifyInfo) ->
@@ -498,8 +501,6 @@ public class UserServiceImpl implements UserService
                             ))
                     )
             ).onErrorResume(this::genericErrorHandle);
-
-        return null;
     }
 
     /**
