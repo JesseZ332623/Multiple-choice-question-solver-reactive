@@ -24,12 +24,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 
 import static com.jesse.examination.core.email.utils.VerifyCodeGenerator.generateVerifyCode;
@@ -60,8 +58,6 @@ public class UserRequestTest
 
     private WebTestClient webTestClient;
 
-    private AtomicLong userId;
-
     private int VERIFYCODE_LENGTH;
 
     private int currentTestIndex = 0;
@@ -80,6 +76,7 @@ public class UserRequestTest
         }
     }
 
+    /** 预热连接池。*/
     @PostConstruct
     public void warmUpConnectionPool() {
         this.userRepository.count().block();
@@ -91,21 +88,6 @@ public class UserRequestTest
         VERIFYCODE_LENGTH = Integer.parseInt(
             this.projectProperties.getVarifyCodeLength()
         );
-    }
-
-    @PostConstruct
-    public void setBeginUserId()
-    {
-        long getMaxUserId
-            = Objects.requireNonNull(this.userRepository
-                     .findMaxUserId()
-                     .switchIfEmpty(Mono.just(0L))
-                     .block()
-            ) + 1;
-
-        userId = new AtomicLong(getMaxUserId);
-
-        log.info("Latest user_id = {}.", getMaxUserId);
     }
 
     @PostConstruct
@@ -153,11 +135,12 @@ public class UserRequestTest
     {
         Map<String, String> userData = new LinkedHashMap<>();
 
-        long userId = this.userId.getAndIncrement();
+        // long userId = this.userId.getAndIncrement();
+        String uuid = UUID.randomUUID().toString();
 
-        userData.put("userName", "Test_" + userId);
+        userData.put("userName", "Test_" + uuid);
         userData.put("password", "1234567890");
-        userData.put("fullName", "Test_User_" + userId);
+        userData.put("fullName", "Test_User_" + uuid);
         userData.put("telephoneNumber", this.generatePhoneNumber());
         userData.put("email", "zhj3191955858@gmail.com");
 
@@ -207,6 +190,10 @@ public class UserRequestTest
                 (index) ->
                     CompletableFuture.supplyAsync(
                         () -> {
+                            log.info(
+                                "[TestUserRegister()] Current thread: {}",
+                                Thread.currentThread().getName()
+                            );
                             try
                             {
                                 ResponseBuilder.APIResponse<UserRegistrationDTO> response =
@@ -268,6 +255,11 @@ public class UserRequestTest
                     () -> {
                         try
                         {
+                            log.info(
+                                "[TestUserLogin()] Current thread: {}",
+                                Thread.currentThread().getName()
+                            );
+
                             String verifyCode = generateVerifyCode(VERIFYCODE_LENGTH).block();
 
                             this.userRedisService
@@ -394,6 +386,10 @@ public class UserRequestTest
                 .map((userName) ->
                     CompletableFuture.supplyAsync(
                     () -> {
+                        log.info(
+                            "[TestUserLogout()] Current thread: {}",
+                            Thread.currentThread().getName()
+                        );
                         try
                         {
                             ResponseBuilder.APIResponse<Object> response =
@@ -452,6 +448,10 @@ public class UserRequestTest
             .map((userName) ->
                 CompletableFuture.supplyAsync(
                     () -> {
+                        log.info(
+                            "[TestUserDelete()] Current thread: {}",
+                            Thread.currentThread().getName()
+                        );
                         try
                         {
                             String verifyCode
