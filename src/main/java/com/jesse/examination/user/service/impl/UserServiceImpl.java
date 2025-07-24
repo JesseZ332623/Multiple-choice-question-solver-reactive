@@ -288,6 +288,7 @@ public class UserServiceImpl implements UserService
                                     registerInfo.getUserName()
                                 ), null, null
                             ))
+                        .timeout(Duration.ofSeconds(10L))
                         .onErrorResume(
                             // 注意异常处理的优先级（先处理业务特定异常，再处理通用异常）
                             (exception) -> {
@@ -354,8 +355,9 @@ public class UserServiceImpl implements UserService
                                 )
                             )
                         );
-                    })
-            ).onErrorResume(this::genericErrorHandle);
+                    }))
+            .timeout(Duration.ofSeconds(10L))
+            .onErrorResume(this::genericErrorHandle);
     }
 
     /**
@@ -389,8 +391,9 @@ public class UserServiceImpl implements UserService
                                             userName)
                                         )
                                     )
-                            )
-                ).onErrorResume(this::genericErrorHandle);
+                            ))
+            .timeout(Duration.ofSeconds(10L))
+            .onErrorResume(this::genericErrorHandle);
     }
 
     private @NotNull Mono<Void>
@@ -499,8 +502,9 @@ public class UserServiceImpl implements UserService
                                     "please login again!", modifyInfo.getNewUserName()
                                 ), null, null
                             ))
-                    )
-            ).onErrorResume(this::genericErrorHandle);
+                    ))
+            .timeout(Duration.ofSeconds(10L))
+            .onErrorResume(this::genericErrorHandle);
     }
 
     /**
@@ -585,7 +589,6 @@ public class UserServiceImpl implements UserService
         return checkPassword.then(checkVarifyCode)
             .then(deleteUserArchive)
             .then(deleteUserFromDataBase)
-            .timeout(Duration.ofSeconds(10L))
             .then(
                 this.responseBuilder.OK(
                     null,
@@ -595,6 +598,7 @@ public class UserServiceImpl implements UserService
                     ), null, null
                 )
             )
+            .timeout(Duration.ofSeconds(10L))
             .onErrorResume(this::genericErrorHandle);
     }
 
@@ -676,8 +680,7 @@ public class UserServiceImpl implements UserService
             return this.emailSender
                        .sendEmail(EmailContent.fromVarify(
                            userName, userEmail,
-                           varifyCode, expiration)
-                       )
+                           varifyCode, expiration))
                        .then(Mono.just(varifyCode));
         });
     }
