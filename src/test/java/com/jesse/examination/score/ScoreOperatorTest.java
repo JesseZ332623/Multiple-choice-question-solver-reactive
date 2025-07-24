@@ -8,7 +8,6 @@ import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
-import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import reactor.core.publisher.Flux;
@@ -80,7 +79,7 @@ public class ScoreOperatorTest
                 );
     }
 
-    @Test
+    // @Test
     public void TestNewScoreGenerate()
     {
         // 若数据表中有数据了，这个测试用例就不要运行。
