@@ -29,7 +29,8 @@ import java.util.*;
 import static com.jesse.examination.core.respponse.ResponseBuilder.APIResponse;
 import static com.jesse.examination.core.respponse.URLParamPrase.praseNumberRequestParam;
 import static com.jesse.examination.core.respponse.URLParamPrase.praseRequestParam;
-import static com.jesse.examination.question.route.QuestionServiceURL.*;
+import static com.jesse.examination.question.route.QuestionServiceURL.QUESTION_PAGINATION_QUERY_URI;
+import static com.jesse.examination.question.route.QuestionServiceURL.QUESTION_SINGLE_QUERY_URI;
 import static java.lang.String.format;
 
 /** 问题业务模块服务实现类。*/
@@ -102,7 +103,7 @@ public class QuestionServiceImpl implements QuestionService
 
                     links.add(
                         new Link("next",
-                            SINGLE_QUERY_URI + "?id=" +
+                            QUESTION_SINGLE_QUERY_URI + "?id=" +
                                 ((questionId + 1 >= count) ? count : questionId + 1),
                             HttpMethod.GET
                         )
@@ -110,7 +111,7 @@ public class QuestionServiceImpl implements QuestionService
 
                     links.add(
                         new Link("prev",
-                            SINGLE_QUERY_URI + "?id=" +
+                            QUESTION_SINGLE_QUERY_URI + "?id=" +
                                 ((questionId - 1 <= 0) ? 1 : questionId - 1),
                             HttpMethod.GET
                         )
@@ -118,14 +119,14 @@ public class QuestionServiceImpl implements QuestionService
 
                     links.add(
                         new Link("first",
-                            SINGLE_QUERY_URI + "?id=1",
+                            QUESTION_SINGLE_QUERY_URI + "?id=1",
                             HttpMethod.GET
                         )
                     );
 
                     links.add(
                         new Link("last",
-                            SINGLE_QUERY_URI + "?id=" + count,
+                            QUESTION_SINGLE_QUERY_URI + "?id=" + count,
                             HttpMethod.GET
                         )
                     );
@@ -203,7 +204,7 @@ public class QuestionServiceImpl implements QuestionService
 
                 links.add(
                     new Link("next_page",
-                        PAGINATION_QUERY_URI +
+                        QUESTION_PAGINATION_QUERY_URI +
                             "?page=" + ((page + 1 > totalPage) ? page : page + 1) +
                             "&amount=" + amount,
                         HttpMethod.GET
@@ -212,7 +213,7 @@ public class QuestionServiceImpl implements QuestionService
 
                 links.add(
                     new Link("prev_page",
-                        PAGINATION_QUERY_URI +
+                        QUESTION_PAGINATION_QUERY_URI +
                             "?page=" + Math.max(page - 1, 1) +
                             "&amount=" + amount,
                         HttpMethod.GET
@@ -221,7 +222,7 @@ public class QuestionServiceImpl implements QuestionService
 
                 links.add(
                     new Link("first_page",
-                        PAGINATION_QUERY_URI +
+                        QUESTION_PAGINATION_QUERY_URI +
                             "?page=1" +
                             "&amount=" + amount,
                         HttpMethod.GET
@@ -230,7 +231,7 @@ public class QuestionServiceImpl implements QuestionService
 
                 links.add(
                     new Link("last_page",
-                        PAGINATION_QUERY_URI +
+                        QUESTION_PAGINATION_QUERY_URI +
                             "?page=" + totalPage +
                             "&amount=" + amount,
                         HttpMethod.GET
