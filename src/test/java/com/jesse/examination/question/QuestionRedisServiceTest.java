@@ -35,7 +35,7 @@ public class QuestionRedisServiceTest
         ThreadLocalRandom random = ThreadLocalRandom.current();
 
         Mono<List<Long>> incrUserQuestionCorrectTime
-            = this.userRedisService.getAllUsers()
+            = this.userRedisService.getAllUsers().take(3)
                 .flatMap((user) ->
                 {
                     log.info("{}", user);
