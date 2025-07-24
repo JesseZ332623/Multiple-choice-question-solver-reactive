@@ -18,7 +18,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import org.springframework.web.reactive.function.server.ServerRequest;
 import org.springframework.web.reactive.function.server.ServerResponse;
 import reactor.core.publisher.Mono;
@@ -47,6 +47,9 @@ public class ScoreRecordServiceImpl implements ScoreRecordService
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private TransactionalOperator transactionalOperator;
 
     /**
      * 本服务实现通用的错误处理类，
@@ -141,7 +144,7 @@ public class ScoreRecordServiceImpl implements ScoreRecordService
         );
     }
 
-    private Mono<Set<Link>>
+    private @NotNull Mono<Set<Link>>
     getSingleScoreQueryLink(Integer scoreId)
     {
         return this.scoreRecordRepository
@@ -339,24 +342,25 @@ public class ScoreRecordServiceImpl implements ScoreRecordService
     }
 
     @Override
-    @Transactional
     public Mono<ServerResponse>
     insertNewScoreRecordByUserId(@NotNull ServerRequest request)
     {
         Mono<ServerResponse> responseMono
             = request.bodyToMono(ScoreRecord.class)
                      .flatMap((newScore) ->
-                         this.scoreRecordRepository
-                             .save(newScore)
-                             .timeout(Duration.ofSeconds(5))
+                         this.transactionalOperator.transactional(
+                                 this.scoreRecordRepository
+                                     .save(newScore)
+                                     .timeout(Duration.ofSeconds(5L)))
                              .flatMap((scoreAfterInsert) -> {
                                  String locationStr
-                                     = SINGLE_SCORE_QUERY_URI + "?id=" + newScore.getScoreId();
+                                     = SINGLE_SCORE_QUERY_URI + "?id=" + scoreAfterInsert.getScoreId();
 
                                  Set<Link> newResourceLink = new HashSet<>();
-                                newResourceLink.add(
+
+                                 newResourceLink.add(
                                     new Link("new_score", locationStr, HttpMethod.GET)
-                                );
+                                 );
 
                                 return this.responseBuilder.CREATED(
                                         URI.create(locationStr),
@@ -373,27 +377,27 @@ public class ScoreRecordServiceImpl implements ScoreRecordService
     }
 
     @Override
-    @Transactional
     public Mono<ServerResponse>
     deleteAllScoreRecordByUserName(ServerRequest request)
     {
         Mono<ServerResponse> responseMono
             = praseRequestParam(request, "name")
               .flatMap((userName) ->
-                  this.userRepository
-                      .findIdByUserName(userName)
-                      .timeout(Duration.ofSeconds(5))
-                      .switchIfEmpty(
-                          Mono.error(
-                              new ResourceNotFoundException(
-                                  format("User name: %s not found!", userName)
-                              )
-                          )
-                      ).flatMap((userId) ->
-                          this.scoreRecordRepository
-                              .deleteAllScoreRecordByUserName(userId)
-                              .timeout(Duration.ofSeconds(5))
-                              .flatMap((deletedRows) -> {
+                  transactionalOperator.transactional(
+                      this.userRepository
+                          .findIdByUserName(userName)
+                          .timeout(Duration.ofSeconds(5))
+                          .switchIfEmpty(
+                              Mono.error(
+                                  new ResourceNotFoundException(
+                                      format("User name: %s not found!", userName)
+                                  )
+                              ))
+                          .flatMap((userId) ->
+                              this.scoreRecordRepository
+                                  .deleteAllScoreRecordByUserName(userId)
+                                  .timeout(Duration.ofSeconds(5)))
+                          .flatMap((deletedRows) -> {
                                   if (deletedRows.equals(0))
                                   {
                                       throw new ResourceNotFoundException(
@@ -416,7 +420,6 @@ public class ScoreRecordServiceImpl implements ScoreRecordService
     }
 
     @Override
-    @Transactional
     public Mono<ServerResponse>
     truncateScoreRecordTable(ServerRequest request)
     {
