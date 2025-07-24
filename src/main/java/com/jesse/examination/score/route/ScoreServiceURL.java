@@ -1,7 +1,11 @@
 package com.jesse.examination.score.route;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 /** 用户成绩模块路由 URL 配置类。*/
-public class ScoreServiceURL
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+final public class ScoreServiceURL
 {
     /** 用户成绩相关操作根 URI。*/
     final public static String SCORE_RECORD_ROOT_URI
