@@ -1,7 +1,11 @@
 package com.jesse.examination.user.route;
 
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
+
 /** 用户模块 URI 配置类。*/
-public class UserServiceURL
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+final public class UserServiceURL
 {
     private static final String USER_SERVICE_ROOT_URI
         = "/api/user";
