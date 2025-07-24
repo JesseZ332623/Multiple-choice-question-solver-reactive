@@ -99,6 +99,9 @@ public class UserRequestTest
 
             this.userRepository
                 .resumeAutoIncrement().block();
+
+            this.scoreRecordRepository
+                .truncateScoreRecordTable().block();
         }
     }
 
@@ -219,7 +222,7 @@ public class UserRequestTest
         final ParameterizedTypeReference<ResponseBuilder.APIResponse<UserRegistrationDTO>>
             userRegisterResponse = new ParameterizedTypeReference<>() {};
 
-        final int CREATE_AMOUNT = 1;
+        final int CREATE_AMOUNT = 5000;
 
         List<CompletableFuture<String>> responseFuture =
         IntStream.range(0, CREATE_AMOUNT)
@@ -389,7 +392,7 @@ public class UserRequestTest
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 
-    /** 在操作之间随机等待 x - 100 毫秒。*/
+    /** 在操作之间随机等待 baseMs ~ 100 毫秒。*/
     void smartWait(int baseMs)
     {
         long waitTime
@@ -412,6 +415,10 @@ public class UserRequestTest
         /* 用户答对问题时答对次数 + 1 的响应体类型。*/
         final ParameterizedTypeReference<ResponseBuilder.APIResponse<Integer>>
             userAnswerCorrectResponseType = new ParameterizedTypeReference<>() {};
+
+        /* 用户提交新成绩时的响应体类型。*/
+        final ParameterizedTypeReference<ResponseBuilder.APIResponse<ScoreRecord>>
+            userSubmitNreScoreResponseType = new ParameterizedTypeReference<>() {};
 
         /* 用户分页查询成绩时的响应体类型。*/
         final ParameterizedTypeReference<ResponseBuilder.APIResponse<List<ScoreRecordQueryDTO>>>
@@ -443,146 +450,131 @@ public class UserRequestTest
         final long GENERIC_SCORE    = 75L;
         final long ONE_PAGE_AMOUNT  = 15L;
 
-        final long QUESTION_PAGE_MAX = questionAmount / ONE_PAGE_AMOUNT;
-        final long SCORE_PAGE_MAX    = GENERIC_SCORE  / ONE_PAGE_AMOUNT;
+        final long QUESTION_PAGE_MAX
+            = Math.max(1, (long) Math.ceil((double) (questionAmount / ONE_PAGE_AMOUNT)));
+
+        final long SCORE_PAGE_MAX
+            = Math.max(1, (long) Math.ceil((double) (GENERIC_SCORE / ONE_PAGE_AMOUNT)));
 
         log.info("Question amount = {}", questionAmount);
         log.info("Test user id = {}", testUserIds);
+        log.info("QUESTION_PAGE_MAX = {}, SCORE_PAGE_MAX = {}", QUESTION_PAGE_MAX, SCORE_PAGE_MAX);
 
         List<CompletableFuture<String>> responseFuture =
-            userInfo.entrySet().stream()
-                .map((user) ->
-                    CompletableFuture.supplyAsync(
-                        () -> {
-                            ThreadLocalRandom random = ThreadLocalRandom.current();
+            userInfo.entrySet()
+                .stream().map((user) ->
+                CompletableFuture.supplyAsync(() -> {
+                    ThreadLocalRandom random = ThreadLocalRandom.current();
 
-                            log.info(
-                                "[doSomethingByLoginUser()] Current thread: {}",
-                                Thread.currentThread().getName()
-                            );
+                    log.info(
+                        "[doSomethingByLoginUser()] Current thread: {}",
+                        Thread.currentThread().getName()
+                    );
 
-                            try
-                            {
-                                var questionQueryResponse =
-                                this.webTestClient
-                                    .get()
-                                    .uri(
-                                        QUESTION_PAGINATION_QUERY_URI +
-                                            "?page="   + random.nextLong(1L, QUESTION_PAGE_MAX) +
-                                            "&amount=" + ONE_PAGE_AMOUNT
-                                    )
-                                    .accept(MediaType.APPLICATION_JSON)
-                                    .exchange()
-                                    .expectStatus().isOk()
-                                    .expectBody(userQuestionQueryResponseType)
-                                    .returnResult().getResponseBody();
+                    try {
+                        var questionQueryResponse =
+                            this.webTestClient
+                                .get()
+                                .uri(
+                                    QUESTION_PAGINATION_QUERY_URI +
+                                        "?page=" + random.nextLong(1L, QUESTION_PAGE_MAX) +
+                                        "&amount=" + ONE_PAGE_AMOUNT
+                                )
+                                .accept(MediaType.APPLICATION_JSON)
+                                .exchange()
+                                .expectStatus().isOk()
+                                .expectBody(userQuestionQueryResponseType)
+                                .returnResult().getResponseBody();
 
-                                this.smartWait(50);
-
-                                var userAnswerCorrectResponse =
-                                LongStream.range(0L, ANSWER_QUESTION)
-                                    .mapToObj(
-                                        (index) ->
-                                            this.webTestClient
-                                                .put()
-                                                .uri(
-                                                    INCREMENT_USER_QUESTION_CORRECT_TIME_URI +
-                                                        "?name="   + user.getValue() +
-                                                        "&ques_id=" + random.nextLong(1, questionAmount)
-                                                )
-                                                .contentType(MediaType.APPLICATION_JSON)
-                                                .accept(MediaType.APPLICATION_JSON)
-                                                .exchange()
-                                                .expectStatus().isOk()
-                                                .expectBody(userAnswerCorrectResponseType)
-                                                .returnResult().getResponseBody()
-                                    ).toList();
-
-                                this.smartWait(50);
-
-                                LongStream.range(0L, GENERIC_SCORE)
-                                    .forEach((index) ->
-                                        this.webTestClient.post()
-                                            .uri(INSERT_NEW_SCORE_URI)
+                        var userAnswerCorrectResponse =
+                            LongStream.range(0L, ANSWER_QUESTION)
+                                .mapToObj(
+                                    (index) ->
+                                        this.webTestClient
+                                            .put()
+                                            .uri(
+                                                INCREMENT_USER_QUESTION_CORRECT_TIME_URI +
+                                                    "?name=" + user.getValue() +
+                                                    "&ques_id=" + random.nextLong(1, questionAmount)
+                                            )
                                             .contentType(MediaType.APPLICATION_JSON)
                                             .accept(MediaType.APPLICATION_JSON)
-                                            .bodyValue(produceScoreRecord(user.getKey()))
                                             .exchange()
-                                            .expectStatus().isCreated()
-                                    );
+                                            .expectStatus().isOk()
+                                            .expectBody(userAnswerCorrectResponseType)
+                                            .returnResult().getResponseBody()
+                                ).toList();
 
-                                this.smartWait(50);
+                        var submitNewScoreResponse =
+                            LongStream.range(0L, GENERIC_SCORE)
+                                .mapToObj((index) ->
+                                    this.webTestClient.post()
+                                        .uri(INSERT_NEW_SCORE_URI)
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .accept(MediaType.APPLICATION_JSON)
+                                        .bodyValue(produceScoreRecord(user.getKey()))
+                                        .exchange()
+                                        .expectStatus().isCreated()
+                                        .expectBody(userSubmitNreScoreResponseType)
+                                        .returnResult().getResponseBody()
+                                ).toList();
 
-                                var userScoreQueryResponse =
-                                this.webTestClient
-                                    .get()
-                                    .uri(
-                                        PAGINATED_SCORE_QUERY_URI +
-                                            "?name=" + user.getValue() +
-                                            "&page=" + random.nextLong(1, SCORE_PAGE_MAX) +
-                                            "&amount=" + ONE_PAGE_AMOUNT
-                                    )
-                                    .accept(MediaType.APPLICATION_JSON)
-                                    .exchange()
-                                    .expectStatus().isOk()
-                                    .expectBody(userScoreQueryResponseType)
-                                    .returnResult().getResponseBody();
+                        var userScoreQueryResponse =
+                            this.webTestClient
+                                .get()
+                                .uri(
+                                    PAGINATED_SCORE_QUERY_URI +
+                                        "?name=" + user.getValue() +
+                                        "&page=" + random.nextLong(1, SCORE_PAGE_MAX + 1) +
+                                        "&amount=" + ONE_PAGE_AMOUNT
+                                )
+                                .accept(MediaType.APPLICATION_JSON)
+                                .exchange()
+                                .expectStatus().isOk()
+                                .expectBody(userScoreQueryResponseType)
+                                .returnResult().getResponseBody();
 
-                                log.info("Content of userScoreQueryResponse: {}", userScoreQueryResponse);
+                        StringBuilder builder = new StringBuilder();
 
-                                Assertions.assertNotNull(userScoreQueryResponse);
-                                Assertions.assertNotNull(questionQueryResponse);
+                        builder.append(
+                            this.objectMapper
+                                .writerWithDefaultPrettyPrinter()
+                                .writeValueAsString(questionQueryResponse))
+                            .append(
+                                this.objectMapper
+                                    .writerWithDefaultPrettyPrinter()
+                                    .writeValueAsString(userAnswerCorrectResponse))
+                            .append(
+                                this.objectMapper
+                                    .writerWithDefaultPrettyPrinter()
+                                    .writeValueAsString(submitNewScoreResponse))
+                            .append(this.objectMapper
+                                        .writerWithDefaultPrettyPrinter()
+                                        .writeValueAsString(userScoreQueryResponse)
+                            );
 
-                                StringBuilder builder = new StringBuilder();
+                        return builder.toString();
+                    }
+                    catch (JsonProcessingException exception)
+                    {
+                        log.error(
+                            "[TestUserLogin()] Json processing failed! Cause: {}",
+                            exception.getMessage(), exception
+                        );
 
-                                var questions = questionQueryResponse.getData();
-                                var scores    = userScoreQueryResponse.getData();
+                        throw new TestAbortedException("Test abort!", exception);
+                    }
+                    catch (Exception exception)
+                    {
+                        log.error(
+                            "[TestUserLogin()] User: {} do user operator failed! Cause: {}.",
+                            user.getValue(), exception.getMessage(), exception
+                        );
 
-                                for (var question : questions)
-                                {
-                                    builder.append(
-                                        this.objectMapper
-                                            .writeValueAsString(question)
-                                    ).append("\n");
-                                }
-
-                                for (var correctResp : userAnswerCorrectResponse)
-                                {
-                                    builder.append(
-                                        correctResp.getMessage()
-                                    ).append("\n");
-                                }
-
-                                for (var score : scores)
-                                {
-                                    builder.append(
-                                        this.objectMapper
-                                            .writeValueAsString(score)
-                                    ).append("\n");
-                                }
-
-                                return builder.toString();
-                            }
-                            catch (JsonProcessingException exception)
-                            {
-                                log.error(
-                                    "[TestUserLogin()] Json processing failed! Cause: {}",
-                                    exception.getMessage(), exception
-                                );
-
-                                throw new TestAbortedException("Test abort!", exception);
-                            }
-                            catch (Exception exception)
-                            {
-                                log.error(
-                                    "[TestUserLogin()] User: {} logout failed! Cause: {}.",
-                                    user.getValue(), exception.getMessage(), exception
-                                );
-
-                                throw new TestAbortedException("Test abort!", exception);
-                            }
-                        }, this.userOperatorExecutor)
-                ).toList();
+                        throw new TestAbortedException("Test abort!", exception);
+                    }
+                }, this.userOperatorExecutor)
+            ).toList();
 
         log.info("User do something operator complete! Show responses: ");
         this.joinResponseFuture(responseFuture)
