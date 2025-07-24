@@ -378,6 +378,11 @@ public class UserServiceImpl implements UserService
                                 ? this.userArchiveManager
                                       .saveUserArchive(userName)
                                       .then(
+                                          this.userRedisService
+                                              .deleteUserInfo(userName)
+                                              .timeout(Duration.ofSeconds(3L))
+                                      )
+                                      .then(
                                           this.responseBuilder
                                               .OK(null,
                                                   format("User %s log out!", userName),
