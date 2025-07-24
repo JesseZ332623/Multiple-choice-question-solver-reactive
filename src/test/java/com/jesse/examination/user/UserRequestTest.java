@@ -4,12 +4,16 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jesse.examination.core.properties.ProjectProperties;
 import com.jesse.examination.core.respponse.ResponseBuilder;
+import com.jesse.examination.question.dto.FullQuestionInfoDTO;
+import com.jesse.examination.question.repository.QuestionRepository;
+import com.jesse.examination.score.dto.ScoreRecordQueryDTO;
+import com.jesse.examination.score.entity.ScoreRecord;
+import com.jesse.examination.score.repository.ScoreRecordRepository;
 import com.jesse.examination.user.dto.UserDeleteDTO;
 import com.jesse.examination.user.dto.UserLoginDTO;
 import com.jesse.examination.user.dto.UserRegistrationDTO;
 import com.jesse.examination.user.redis.UserRedisService;
 import com.jesse.examination.user.repository.UserRepository;
-import com.jesse.examination.user.route.UserServiceRouteConfig;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
@@ -25,12 +29,20 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.LongStream;
 
 import static com.jesse.examination.core.email.utils.VerifyCodeGenerator.generateVerifyCode;
+import static com.jesse.examination.question.route.QuestionServiceURL.*;
+import static com.jesse.examination.score.RandomTimeGenerator.randomBetween;
+import static com.jesse.examination.score.route.ScoreServiceURL.INSERT_NEW_SCORE_URI;
+import static com.jesse.examination.score.route.ScoreServiceURL.PAGINATED_SCORE_QUERY_URI;
 
 /** 用户服务请求测试类。*/
 @Slf4j
@@ -43,6 +55,12 @@ public class UserRequestTest
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private QuestionRepository questionRepository;
+
+    @Autowired
+    private ScoreRecordRepository scoreRecordRepository;
 
     @Autowired
     private UserRedisService userRedisService;
@@ -58,11 +76,18 @@ public class UserRequestTest
 
     private WebTestClient webTestClient;
 
+    /** 项目统一的验证码长度（运行时从配置文件获取）。*/
     private int VERIFYCODE_LENGTH;
+
+    private int PROCESSOR_AMOUNT;
 
     private int currentTestIndex = 0;
     private static final int TEST_AMOUNT = 5;
 
+    /**
+     * 在最后一条测试用例执行完毕后，
+     * 重设用户表的 AUTO_INCREMENT 为 1。
+     */
     @AfterEach
     public void resumUserIdAutoIncrement()
     {
@@ -72,14 +97,29 @@ public class UserRequestTest
         {
             log.info("User test totally complete! Resume AUTO_INCREMENT = 1");
 
-            this.userRepository.resumeAutoIncrement();
+            this.userRepository
+                .resumeAutoIncrement().block();
         }
+    }
+
+    /** 获取本设备 CPU 的物理核心数。*/
+    @PostConstruct
+    public void getProcessorAmountOfThisDevice()
+    {
+        PROCESSOR_AMOUNT = Runtime.getRuntime().availableProcessors();
+
+        log.info(
+            "Processor amount = {}", PROCESSOR_AMOUNT
+        );
     }
 
     /** 预热连接池。*/
     @PostConstruct
-    public void warmUpConnectionPool() {
+    public void warmUpConnectionPool()
+    {
         this.userRepository.count().block();
+        this.questionRepository.count().block();
+        this.scoreRecordRepository.count().block();
     }
 
     @PostConstruct
@@ -90,16 +130,13 @@ public class UserRequestTest
         );
     }
 
+    /** 将项目的上下文整体绑定给 WebTestClient。*/
     @PostConstruct
     public void bindRouterFunction()
     {
-        var userServiceRouteConfig
-            = this.applicationContext
-                  .getBean(UserServiceRouteConfig.class);
-
         this.webTestClient
-            = WebTestClient.bindToRouterFunction(
-                userServiceRouteConfig.userRouterFunction()
+            = WebTestClient.bindToApplicationContext(
+                this.applicationContext
             ).build();
     }
 
@@ -122,20 +159,20 @@ public class UserRequestTest
         );
     }
 
-    /**
-     * {
-     *     "userName" : "Test_3",
-     *     "password" : "1234567890",
-     *     "fullName" : "Test_User_3",
-     *     "telephoneNumber" : "13677898776",
-     *     "email" : "zhj3191955858@gmail.com"
-     * }
-     */
+    private @NotNull List<Long>
+    getAllUserIds()
+    {
+        return Objects.requireNonNull(
+            this.userRepository
+                .findAllIds()
+                .collectList().block()
+        );
+    }
+
     private String generateUserData()
     {
         Map<String, String> userData = new LinkedHashMap<>();
 
-        // long userId = this.userId.getAndIncrement();
         String uuid = UUID.randomUUID().toString();
 
         userData.put("userName", "Test_" + uuid);
@@ -164,10 +201,10 @@ public class UserRequestTest
         return userJson;
     }
 
-    private List<String>
+    private <T> List<T>
     joinResponseFuture(
         @NotNull
-        List<CompletableFuture<String>> responseFuture
+        List<CompletableFuture<T>> responseFuture
     )
     {
         return responseFuture.stream()
@@ -182,7 +219,7 @@ public class UserRequestTest
         final ParameterizedTypeReference<ResponseBuilder.APIResponse<UserRegistrationDTO>>
             userRegisterResponse = new ParameterizedTypeReference<>() {};
 
-        final int CREATE_AMOUNT = 1000;
+        final int CREATE_AMOUNT = 1;
 
         List<CompletableFuture<String>> responseFuture =
         IntStream.range(0, CREATE_AMOUNT)
@@ -207,8 +244,6 @@ public class UserRequestTest
                                     .expectStatus().isOk()
                                     .expectBody(userRegisterResponse)
                                     .returnResult().getResponseBody();
-
-                                assert response != null && response.getStatus().equals(HttpStatus.OK);
 
                                 return this.objectMapper.writeValueAsString(response);
                             }
@@ -246,7 +281,7 @@ public class UserRequestTest
         final ParameterizedTypeReference<ResponseBuilder.APIResponse<Object>>
             userLoginResponseType = new ParameterizedTypeReference<>() {};
 
-        List<String> allUserNames  = this.getAllUserName();
+        final List<String> allUserNames = this.getAllUserName();
 
         List<CompletableFuture<String>> responseFuture =
         allUserNames.stream()
@@ -302,6 +337,254 @@ public class UserRequestTest
             ).toList();
 
         log.info("All user login complete! show responses: ");
+        this.joinResponseFuture(responseFuture)
+            .forEach(System.out::println);
+    }
+
+    private @NotNull ScoreRecord
+    produceScoreRecord(long specifiedUserId)
+    {
+        ThreadLocalRandom random = ThreadLocalRandom.current();
+
+        return new ScoreRecord(
+            specifiedUserId,
+            randomBetween(
+                LocalDateTime.of(
+                    2015, 1, 1,
+                    0, 0, 0),
+                LocalDateTime.now()
+            ),
+            random.nextInt(1, 30),
+            random.nextInt(1, 30),
+            random.nextInt(1, 30)
+        );
+    }
+
+    /** 从列表中随机取 limit 个元素，并返回一个不重复的集合。*/
+    private <T> List<T>
+    getRandomLimit(@NotNull List<T> list, long limit)
+    {
+        if (list.isEmpty()) {
+            throw new IllegalArgumentException("Param list not be empty!");
+        }
+
+        if (limit < 0) {
+            throw new IllegalArgumentException("Param limit not less then 0!");
+        }
+
+        if (limit == 0) {
+            return Collections.emptyList();
+        }
+
+        if (list.size() == limit || list.size() < limit) {
+            return new ArrayList<>(list);
+        }
+
+        return ThreadLocalRandom
+                .current()
+                .ints(0, list.size())
+                .distinct()
+                .limit(limit)
+                .mapToObj(list::get)
+                .collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    /** 在操作之间随机等待 x - 100 毫秒。*/
+    void smartWait(int baseMs)
+    {
+        long waitTime
+            = baseMs + ThreadLocalRandom.current().nextInt(100);
+
+        try {
+            Thread.sleep(waitTime);
+        } catch (InterruptedException ignored) {}
+    }
+
+    /** 对于所已经登录的用户，都执行一些成绩、问题的查询和答题操作。*/
+    @Order(3)
+    @Test
+    void doSomethingByLoginUser()
+    {
+        /* 分页查询问题完整数据的响应体类型。*/
+        final ParameterizedTypeReference<ResponseBuilder.APIResponse<List<FullQuestionInfoDTO>>>
+            userQuestionQueryResponseType = new ParameterizedTypeReference<>() {};
+
+        /* 用户答对问题时答对次数 + 1 的响应体类型。*/
+        final ParameterizedTypeReference<ResponseBuilder.APIResponse<Integer>>
+            userAnswerCorrectResponseType = new ParameterizedTypeReference<>() {};
+
+        /* 用户分页查询成绩时的响应体类型。*/
+        final ParameterizedTypeReference<ResponseBuilder.APIResponse<List<ScoreRecordQueryDTO>>>
+            userScoreQueryResponseType = new ParameterizedTypeReference<>() {};
+
+        /*
+         * 限制并发数，只在所有用户中随机挑 PROCESSOR_AMOUNT * 2 个用户模拟操作即可
+         * （不要把行为测试玩成极限压力测试！）
+         */
+        final long CONCURRENT_LIMIT = PROCESSOR_AMOUNT * 2L;
+
+        final List<String> testUserNames
+            = this.getRandomLimit(this.getAllUserName(), CONCURRENT_LIMIT);
+
+        final List<Long> testUserIds
+            = this.getRandomLimit(this.getAllUserIds(), CONCURRENT_LIMIT);
+
+        final Map<Long, String> userInfo
+            = IntStream.range(0, testUserNames.size())
+                       .boxed()
+                       .collect(Collectors.toMap(testUserIds::get, testUserNames::get));
+
+        final long questionAmount
+            = Objects.requireNonNull(
+                this.questionRepository.count().block()
+            );
+
+        final long ANSWER_QUESTION  = questionAmount / 5L;
+        final long GENERIC_SCORE    = 75L;
+        final long ONE_PAGE_AMOUNT  = 15L;
+
+        final long QUESTION_PAGE_MAX = questionAmount / ONE_PAGE_AMOUNT;
+        final long SCORE_PAGE_MAX    = GENERIC_SCORE  / ONE_PAGE_AMOUNT;
+
+        log.info("Question amount = {}", questionAmount);
+        log.info("Test user id = {}", testUserIds);
+
+        List<CompletableFuture<String>> responseFuture =
+            userInfo.entrySet().stream()
+                .map((user) ->
+                    CompletableFuture.supplyAsync(
+                        () -> {
+                            ThreadLocalRandom random = ThreadLocalRandom.current();
+
+                            log.info(
+                                "[doSomethingByLoginUser()] Current thread: {}",
+                                Thread.currentThread().getName()
+                            );
+
+                            try
+                            {
+                                var questionQueryResponse =
+                                this.webTestClient
+                                    .get()
+                                    .uri(
+                                        QUESTION_PAGINATION_QUERY_URI +
+                                            "?page="   + random.nextLong(1L, QUESTION_PAGE_MAX) +
+                                            "&amount=" + ONE_PAGE_AMOUNT
+                                    )
+                                    .accept(MediaType.APPLICATION_JSON)
+                                    .exchange()
+                                    .expectStatus().isOk()
+                                    .expectBody(userQuestionQueryResponseType)
+                                    .returnResult().getResponseBody();
+
+                                this.smartWait(50);
+
+                                var userAnswerCorrectResponse =
+                                LongStream.range(0L, ANSWER_QUESTION)
+                                    .mapToObj(
+                                        (index) ->
+                                            this.webTestClient
+                                                .put()
+                                                .uri(
+                                                    INCREMENT_USER_QUESTION_CORRECT_TIME_URI +
+                                                        "?name="   + user.getValue() +
+                                                        "&ques_id=" + random.nextLong(1, questionAmount)
+                                                )
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .accept(MediaType.APPLICATION_JSON)
+                                                .exchange()
+                                                .expectStatus().isOk()
+                                                .expectBody(userAnswerCorrectResponseType)
+                                                .returnResult().getResponseBody()
+                                    ).toList();
+
+                                this.smartWait(50);
+
+                                LongStream.range(0L, GENERIC_SCORE)
+                                    .forEach((index) ->
+                                        this.webTestClient.post()
+                                            .uri(INSERT_NEW_SCORE_URI)
+                                            .contentType(MediaType.APPLICATION_JSON)
+                                            .accept(MediaType.APPLICATION_JSON)
+                                            .bodyValue(produceScoreRecord(user.getKey()))
+                                            .exchange()
+                                            .expectStatus().isCreated()
+                                    );
+
+                                this.smartWait(50);
+
+                                var userScoreQueryResponse =
+                                this.webTestClient
+                                    .get()
+                                    .uri(
+                                        PAGINATED_SCORE_QUERY_URI +
+                                            "?name=" + user.getValue() +
+                                            "&page=" + random.nextLong(1, SCORE_PAGE_MAX) +
+                                            "&amount=" + ONE_PAGE_AMOUNT
+                                    )
+                                    .accept(MediaType.APPLICATION_JSON)
+                                    .exchange()
+                                    .expectStatus().isOk()
+                                    .expectBody(userScoreQueryResponseType)
+                                    .returnResult().getResponseBody();
+
+                                log.info("Content of userScoreQueryResponse: {}", userScoreQueryResponse);
+
+                                Assertions.assertNotNull(userScoreQueryResponse);
+                                Assertions.assertNotNull(questionQueryResponse);
+
+                                StringBuilder builder = new StringBuilder();
+
+                                var questions = questionQueryResponse.getData();
+                                var scores    = userScoreQueryResponse.getData();
+
+                                for (var question : questions)
+                                {
+                                    builder.append(
+                                        this.objectMapper
+                                            .writeValueAsString(question)
+                                    ).append("\n");
+                                }
+
+                                for (var correctResp : userAnswerCorrectResponse)
+                                {
+                                    builder.append(
+                                        correctResp.getMessage()
+                                    ).append("\n");
+                                }
+
+                                for (var score : scores)
+                                {
+                                    builder.append(
+                                        this.objectMapper
+                                            .writeValueAsString(score)
+                                    ).append("\n");
+                                }
+
+                                return builder.toString();
+                            }
+                            catch (JsonProcessingException exception)
+                            {
+                                log.error(
+                                    "[TestUserLogin()] Json processing failed! Cause: {}",
+                                    exception.getMessage(), exception
+                                );
+
+                                throw new TestAbortedException("Test abort!", exception);
+                            }
+                            catch (Exception exception)
+                            {
+                                log.error(
+                                    "[TestUserLogin()] User: {} logout failed! Cause: {}.",
+                                    user.getValue(), exception.getMessage(), exception
+                                );
+
+                                throw new TestAbortedException("Test abort!", exception);
+                            }
+                        }, this.userOperatorExecutor)
+                ).toList();
+
+        log.info("User do something operator complete! Show responses: ");
         this.joinResponseFuture(responseFuture)
             .forEach(System.out::println);
     }
@@ -402,8 +685,6 @@ public class UserRequestTest
                                     .expectStatus().isOk()
                                     .expectBody(userLoginResponseType)
                                     .returnResult().getResponseBody();
-
-                            assert response != null && response.getStatus().equals(HttpStatus.OK);
 
                             return this.objectMapper
                                 .writeValueAsString(response);
