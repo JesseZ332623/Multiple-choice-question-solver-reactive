@@ -10,7 +10,7 @@ import org.springframework.web.reactive.function.server.ServerResponse;
 
 import static com.jesse.examination.question.route.QuestionServiceURL.*;
 
-/** 问题查询模块路由函数配置类。 */
+/** 问题查询模块路由函数配置类。*/
 @Configuration
 public class QuestionRouteConfig
 {
@@ -22,9 +22,9 @@ public class QuestionRouteConfig
     questionRouteFunction()
     {
         return RouterFunctions.route()
-            .GET(SINGLE_QUERY_URI,     this.questionService::getQuestionWithOptions)
-            .GET(PAGINATION_QUERY_URI, this.questionService::getPaginatedQuestions)
-            .GET(PAGINATION_QUERY_WITH_CORRECT_URI, this.questionService::getAllQuestionWithCorrectOption)
+            .GET(QUESTION_SINGLE_QUERY_URI,     this.questionService::getQuestionWithOptions)
+            .GET(QUESTION_PAGINATION_QUERY_URI, this.questionService::getPaginatedQuestions)
+            .GET(QUESTION_PAGINATION_QUERY_WITH_CORRECT_URI, this.questionService::getAllQuestionWithCorrectOption)
             .PUT(INCREMENT_USER_QUESTION_CORRECT_TIME_URI, this.questionService::incrementUserQuestionCorrectTime)
             .PUT(SET_USER_QUESTION_CORRECT_TIME_URI, this.questionService::setUserQuestionCorrectTime)
             .PUT(CLEAR_USER_QUESTION_CORRECT_TIME_URI, this.questionService::clearUserQuestionCorrectTime)
