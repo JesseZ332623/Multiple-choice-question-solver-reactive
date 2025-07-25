@@ -95,7 +95,7 @@ public class ScoreRecordServiceImpl implements ScoreRecordService
                  * 若总数据量除以每页数据量不是整数（还有多余的数据不足一整页），就向上取整。
                  */
                 int totalPage
-                    = (int) Math.ceil((double) (totalItem / amount));
+                    = (int) Math.ceil((double) totalItem / amount);
 
                 Set<Link> links = new HashSet<>();
 
@@ -233,76 +233,81 @@ public class ScoreRecordServiceImpl implements ScoreRecordService
             = Mono.zip(nameMono, pageMono, amountMono)
             .flatMap((params) ->
             {
-                final String  name = params.getT1();
-                return this.scoreRecordRepository.findScoreAmountByUserName(name)
-                    .timeout(Duration.ofSeconds(5))
-                    .flatMap(
-                    (totalItem) ->
-                    {
-                        // System.out.printf("Total item of %s = %d%n", name, totalItem);
-
-                        final Integer page   = params.getT2();
-                        final Integer amount = params.getT3();
-
-                        int offset = (page - 1) * amount;
-
-                        if (offset > totalItem)
+                final String name = params.getT1();
+                
+                return this.transactionalOperator.transactional(
+                    this.scoreRecordRepository
+                        .findScoreAmountByUserName(name)
+                        .timeout(Duration.ofSeconds(10L))
+                        .flatMap((totalItem) ->
                         {
-                            return Mono.error(
-                                new PaginationOffsetOutOfRangeException(
-                                    format(
-                                        "Input page (which is: %d) param is to large!", page
-                                    )
-                                )
-                            );
-                        }
+                            final Integer page   = params.getT2();
+                            final Integer amount = params.getT3();
 
-                        return this.scoreRecordRepository
-                            .findPaginatedScoreRecordByUserName(name, amount, offset)
-                            .timeout(Duration.ofSeconds(5))
-                            .switchIfEmpty(
-                                Mono.error(
-                                    new ResourceNotFoundException(
+                            int offset = (page - 1) * amount;
+
+                            if (offset >= totalItem)
+                            {
+                                return Mono.error(
+                                    new PaginationOffsetOutOfRangeException(
                                         format(
-                                            "pagination param invalid! " +
-                                            "Your param: (userName = %s, page = %d, amount = %d)",
-                                            name, page, amount
+                                            "Input page (which is: %d) param is to large!", page
+                                        )
+                                    )
+                                );
+                            }
+
+                            log.info(
+                                "Do paginated score query. Name = {}, Amount = {}, Offset = {}",
+                                name, amount, offset
+                            );
+
+                            return this.scoreRecordRepository
+                                .findPaginatedScoreRecordByUserName(name, amount, offset)
+                                .timeout(Duration.ofSeconds(10L))
+                                .switchIfEmpty(
+                                    Mono.error(
+                                        new ResourceNotFoundException(
+                                            format(
+                                                "pagination param invalid! " +
+                                                    "Your param: (userName = %s, page = %d, amount = %d)",
+                                                name, page, amount
+                                            )
                                         )
                                     )
                                 )
-                            )
-                            .collectList()
-                            .flatMap((scores) ->
-                                this.getScorePaginationQueryLink(name, page, amount, totalItem).flatMap(
-                                    (links) -> {
-                                        ResponseBuilder.APIResponse<List<ScoreRecordQueryDTO>>
-                                            response = new ResponseBuilder.APIResponse<>(HttpStatus.OK);
-
-                                        for (Link link : links)
+                                .collectList()
+                                .flatMap((scores) ->
+                                    this.getScorePaginationQueryLink(name, page, amount, totalItem)
+                                        .flatMap((links) ->
                                         {
-                                            response.withLink(
-                                                link.getRel(), link.getHref(), link.getMethod()
+                                            ResponseBuilder.APIResponse<List<ScoreRecordQueryDTO>>
+                                                response = new ResponseBuilder.APIResponse<>(HttpStatus.OK);
+
+                                            for (Link link : links)
+                                            {
+                                                response.withLink(
+                                                    link.getRel(), link.getHref(), link.getMethod()
+                                                );
+                                            }
+
+                                            response.withPagination(page, amount, totalItem);
+                                            response.setData(scores);
+                                            response.setMessage(
+                                                format(
+                                                    "Query score record (Page = %d, Amount = %d) complete!",
+                                                    page, amount
+                                                )
+                                            );
+
+                                            return this.responseBuilder.build(
+                                                (headers) ->
+                                                    headers.setContentType(MediaType.APPLICATION_JSON),
+                                                response
                                             );
                                         }
-
-                                        response.withPagination(page, amount, totalItem);
-                                        response.setData(scores);
-                                        response.setMessage(
-                                            format(
-                                                "Query score record (Page = %d, Amount = %d) complete!",
-                                                page, amount
-                                            )
-                                        );
-
-                                        return this.responseBuilder.build(
-                                            (headers) ->
-                                                headers.setContentType(MediaType.APPLICATION_JSON),
-                                            response
-                                        );
-                                    }
-                                ));
-
-                    }
+                                    ));
+                        })
                 );
             })
             .onErrorResume(
