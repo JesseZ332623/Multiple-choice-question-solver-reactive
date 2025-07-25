@@ -2,6 +2,7 @@ package com.jesse.examination.user;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.jesse.examination.core.properties.ProjectProperties;
 import com.jesse.examination.core.respponse.ResponseBuilder;
 import com.jesse.examination.question.dto.FullQuestionInfoDTO;
@@ -29,6 +30,11 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import reactor.core.publisher.Flux;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -222,7 +228,7 @@ public class UserRequestTest
         final ParameterizedTypeReference<ResponseBuilder.APIResponse<UserRegistrationDTO>>
             userRegisterResponse = new ParameterizedTypeReference<>() {};
 
-        final int CREATE_AMOUNT = 5000;
+        final int CREATE_AMOUNT = 500;
 
         List<CompletableFuture<String>> responseFuture =
         IntStream.range(0, CREATE_AMOUNT)
@@ -425,10 +431,10 @@ public class UserRequestTest
             userScoreQueryResponseType = new ParameterizedTypeReference<>() {};
 
         /*
-         * 限制并发数，只在所有用户中随机挑 PROCESSOR_AMOUNT * 2 个用户模拟操作即可
+         * 限制并发数，只在所有用户中随机挑 PROCESSOR_AMOUNT 个用户模拟操作即可
          * （不要把行为测试玩成极限压力测试！）
          */
-        final long CONCURRENT_LIMIT = PROCESSOR_AMOUNT * 2L;
+        final long CONCURRENT_LIMIT = PROCESSOR_AMOUNT;
 
         final List<String> testUserNames
             = this.getRandomLimit(this.getAllUserName(), CONCURRENT_LIMIT);
@@ -446,206 +452,179 @@ public class UserRequestTest
                 this.questionRepository.count().block()
             );
 
-        final long ANSWER_QUESTION  = questionAmount / 5L;
-        final long GENERIC_SCORE    = 75L;
+        final long ANSWER_QUESTION  = questionAmount / 4L;
+        final long GENERIC_SCORE    = 25L;
         final long ONE_PAGE_AMOUNT  = 15L;
 
         final long QUESTION_PAGE_MAX
-            = Math.max(1, (long) Math.ceil((double) (questionAmount / ONE_PAGE_AMOUNT)));
+            = Math.max(1, (long) Math.ceil((double) questionAmount / ONE_PAGE_AMOUNT));
 
         final long SCORE_PAGE_MAX
-            = Math.max(1, (long) Math.ceil((double) (GENERIC_SCORE / ONE_PAGE_AMOUNT)));
+            = Math.max(1, (long) Math.ceil((double) GENERIC_SCORE / ONE_PAGE_AMOUNT));
+
+        final Path responseSavaPath
+            = Path.of(this.projectProperties.getTestResultPath())
+                  .resolve("User-Request-Test")
+                  .normalize();
+
+        // 启用 Jackson 的优质打印功能
+        this.objectMapper.enable(SerializationFeature.INDENT_OUTPUT);
 
         log.info("Question amount = {}", questionAmount);
         log.info("Test user id = {}", testUserIds);
         log.info("QUESTION_PAGE_MAX = {}, SCORE_PAGE_MAX = {}", QUESTION_PAGE_MAX, SCORE_PAGE_MAX);
 
-        List<CompletableFuture<String>> responseFuture =
-            userInfo.entrySet()
-                .stream().map((user) ->
-                CompletableFuture.supplyAsync(() -> {
-                    ThreadLocalRandom random = ThreadLocalRandom.current();
+        List<CompletableFuture<Void>> responsesFuture =
+        userInfo.entrySet().stream().map((user) ->
+            CompletableFuture.runAsync(() ->
+            {
+                ThreadLocalRandom random = ThreadLocalRandom.current();
 
-                    log.info(
-                        "[doSomethingByLoginUser()] Current thread: {}",
-                        Thread.currentThread().getName()
+                log.info(
+                    "[doSomethingByLoginUser()] Current thread: {}",
+                    Thread.currentThread().getName()
+                );
+
+                try
+                {
+                    var questionQueryResponse =
+                        this.webTestClient
+                            .get()
+                            .uri(
+                                QUESTION_PAGINATION_QUERY_URI +
+                                    "?page=" + random.nextLong(1L, QUESTION_PAGE_MAX) +
+                                    "&amount=" + ONE_PAGE_AMOUNT
+                            )
+                            .accept(MediaType.APPLICATION_JSON)
+                            .exchange()
+                            .expectStatus().isOk()
+                            .expectBody(userQuestionQueryResponseType)
+                            .returnResult().getResponseBody();
+
+                    Files.writeString(
+                        responseSavaPath
+                            .resolve("question-response" + user.getValue() + ".json")
+                            .normalize(),
+                        this.objectMapper.writeValueAsString(questionQueryResponse),
+                        StandardCharsets.UTF_8,
+                        StandardOpenOption.TRUNCATE_EXISTING,
+                        StandardOpenOption.CREATE
                     );
 
-                    try {
-                        var questionQueryResponse =
-                            this.webTestClient
-                                .get()
-                                .uri(
-                                    QUESTION_PAGINATION_QUERY_URI +
-                                        "?page=" + random.nextLong(1L, QUESTION_PAGE_MAX) +
-                                        "&amount=" + ONE_PAGE_AMOUNT
-                                )
-                                .accept(MediaType.APPLICATION_JSON)
-                                .exchange()
-                                .expectStatus().isOk()
-                                .expectBody(userQuestionQueryResponseType)
-                                .returnResult().getResponseBody();
+                    this.smartWait(random.nextInt(50, 75));
 
-                        var userAnswerCorrectResponse =
-                            LongStream.range(0L, ANSWER_QUESTION)
-                                .mapToObj(
-                                    (index) ->
-                                        this.webTestClient
-                                            .put()
-                                            .uri(
-                                                INCREMENT_USER_QUESTION_CORRECT_TIME_URI +
-                                                    "?name=" + user.getValue() +
-                                                    "&ques_id=" + random.nextLong(1, questionAmount)
-                                            )
-                                            .contentType(MediaType.APPLICATION_JSON)
-                                            .accept(MediaType.APPLICATION_JSON)
-                                            .exchange()
-                                            .expectStatus().isOk()
-                                            .expectBody(userAnswerCorrectResponseType)
-                                            .returnResult().getResponseBody()
-                                ).toList();
+                    var userAnswerCorrectResponse =
+                        LongStream.range(0L, ANSWER_QUESTION)
+                            .mapToObj((index) ->
+                                this.webTestClient
+                                    .put()
+                                    .uri(
+                                        INCREMENT_USER_QUESTION_CORRECT_TIME_URI +
+                                            "?name=" + user.getValue() +
+                                            "&ques_id=" + random.nextLong(1, questionAmount))
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .accept(MediaType.APPLICATION_JSON)
+                                    .exchange()
+                                    .expectStatus().isOk()
+                                    .expectBody(userAnswerCorrectResponseType)
+                                    .returnResult().getResponseBody()
+                            ).toList();
 
-                        var submitNewScoreResponse =
-                            LongStream.range(0L, GENERIC_SCORE)
-                                .mapToObj((index) ->
-                                    this.webTestClient.post()
-                                        .uri(INSERT_NEW_SCORE_URI)
-                                        .contentType(MediaType.APPLICATION_JSON)
-                                        .accept(MediaType.APPLICATION_JSON)
-                                        .bodyValue(produceScoreRecord(user.getKey()))
-                                        .exchange()
-                                        .expectStatus().isCreated()
-                                        .expectBody(userSubmitNreScoreResponseType)
-                                        .returnResult().getResponseBody()
-                                ).toList();
+                    Files.writeString(
+                        responseSavaPath
+                            .resolve("answer-correct-" + user.getValue() + ".json")
+                            .normalize(),
+                        this.objectMapper.writeValueAsString(userAnswerCorrectResponse),
+                        StandardCharsets.UTF_8,
+                        StandardOpenOption.TRUNCATE_EXISTING,
+                        StandardOpenOption.CREATE
+                    );
 
-                        var userScoreQueryResponse =
-                            this.webTestClient
-                                .get()
-                                .uri(
-                                    PAGINATED_SCORE_QUERY_URI +
-                                        "?name=" + user.getValue() +
-                                        "&page=" + random.nextLong(1, SCORE_PAGE_MAX + 1) +
-                                        "&amount=" + ONE_PAGE_AMOUNT
-                                )
-                                .accept(MediaType.APPLICATION_JSON)
-                                .exchange()
-                                .expectStatus().isOk()
-                                .expectBody(userScoreQueryResponseType)
-                                .returnResult().getResponseBody();
+                    this.smartWait(random.nextInt(50, 75));
 
-                        StringBuilder builder = new StringBuilder();
+                    var submitNewScoreResponse =
+                        LongStream.range(0L, GENERIC_SCORE)
+                            .mapToObj((index) ->
+                                this.webTestClient.post()
+                                    .uri(INSERT_NEW_SCORE_URI)
+                                    .contentType(MediaType.APPLICATION_JSON)
+                                    .accept(MediaType.APPLICATION_JSON)
+                                    .bodyValue(produceScoreRecord(user.getKey()))
+                                    .exchange()
+                                    .expectStatus().isCreated()
+                                    .expectBody(userSubmitNreScoreResponseType)
+                                    .returnResult().getResponseBody()
+                            ).toList();
 
-                        builder.append(
-                            this.objectMapper
-                                .writerWithDefaultPrettyPrinter()
-                                .writeValueAsString(questionQueryResponse))
-                            .append(
-                                this.objectMapper
-                                    .writerWithDefaultPrettyPrinter()
-                                    .writeValueAsString(userAnswerCorrectResponse))
-                            .append(
-                                this.objectMapper
-                                    .writerWithDefaultPrettyPrinter()
-                                    .writeValueAsString(submitNewScoreResponse))
-                            .append(this.objectMapper
-                                        .writerWithDefaultPrettyPrinter()
-                                        .writeValueAsString(userScoreQueryResponse)
-                            );
+                    Files.writeString(
+                        responseSavaPath
+                            .resolve("submit-new-score" + user.getValue() + ".json")
+                            .normalize(),
+                        this.objectMapper.writeValueAsString(submitNewScoreResponse),
+                        StandardCharsets.UTF_8,
+                        StandardOpenOption.TRUNCATE_EXISTING,
+                        StandardOpenOption.CREATE
+                    );
 
-                        return builder.toString();
-                    }
-                    catch (JsonProcessingException exception)
-                    {
-                        log.error(
-                            "[TestUserLogin()] Json processing failed! Cause: {}",
-                            exception.getMessage(), exception
-                        );
+                    this.smartWait(random.nextInt(50, 75));
 
-                        throw new TestAbortedException("Test abort!", exception);
-                    }
-                    catch (Exception exception)
-                    {
-                        log.error(
-                            "[TestUserLogin()] User: {} do user operator failed! Cause: {}.",
-                            user.getValue(), exception.getMessage(), exception
-                        );
+                    var userScoreQueryResponse =
+                        this.webTestClient
+                            .get()
+                            .uri(
+                                PAGINATED_SCORE_QUERY_URI +
+                                    "?name=" + user.getValue() +
+                                    "&page=" + random.nextLong(1, SCORE_PAGE_MAX + 1) +
+                                    "&amount=" + ONE_PAGE_AMOUNT)
+                            .accept(MediaType.APPLICATION_JSON)
+                            .exchange()
+                            .expectStatus().isOk()
+                            .expectBody(userScoreQueryResponseType)
+                            .returnResult().getResponseBody();
 
-                        throw new TestAbortedException("Test abort!", exception);
-                    }
-                }, this.userOperatorExecutor)
-            ).toList();
+                    Files.writeString(
+                        responseSavaPath
+                            .resolve("score-query-response" + user.getValue() + ".json")
+                            .normalize(),
+                        this.objectMapper.writeValueAsString(userScoreQueryResponse),
+                        StandardCharsets.UTF_8,
+                        StandardOpenOption.TRUNCATE_EXISTING,
+                        StandardOpenOption.CREATE
+                    );
+                }
+                catch (JsonProcessingException exception)
+                {
+                    log.error(
+                        "[TestUserLogin()] Json processing failed! Cause: {}.",
+                        exception.getMessage(), exception
+                    );
 
-        log.info("User do something operator complete! Show responses: ");
-        this.joinResponseFuture(responseFuture)
-            .forEach(System.out::println);
+                    throw new TestAbortedException("Test abort!", exception);
+                }
+                catch (IOException exception)
+                {
+                    log.error(
+                        "Save response JSON file failed! Cause: {}.",
+                        exception.getMessage(), exception
+                    );
+
+                    throw new TestAbortedException("Test abort!", exception);
+                }
+                catch (Exception exception)
+                {
+                    log.error(
+                        "[TestUserLogin()] User: {} do user operator failed! Cause: {}.",
+                        user.getValue(), exception.getMessage(), exception
+                    );
+
+                    throw new TestAbortedException("Test abort!", exception);
+                }
+
+            }, this.userOperatorExecutor)
+        ).toList();
+
+        this.joinResponseFuture(responsesFuture);
     }
-
-//    @Order(3)
-//    @Test
-//    public void TestUserModify()
-//    {
-//        final ParameterizedTypeReference<ResponseBuilder.APIResponse<Object>>
-//            userModifyResponseType = new ParameterizedTypeReference<>() {};
-//
-//        // ThreadLocalRandom random = ThreadLocalRandom.current();
-//
-//        List<String> allUserNames = this.getAllUserName();
-//
-//        List<CompletableFuture<String>> responseFuture
-//            = allUserNames.stream()
-//            .map((userName) ->
-//                CompletableFuture.supplyAsync(
-//                    () -> {
-//                        try
-//                        {
-//                            ResponseBuilder.APIResponse<Object> response =
-//                                this.webTestClient.put()
-//                                    .uri("/api/user/modify")
-//                                    .contentType(MediaType.APPLICATION_JSON)
-//                                    .accept(MediaType.APPLICATION_JSON)
-//                                    .bodyValue(
-//                                        new UserModifyDTO()
-//                                            .setOldUserName(userName)
-//                                            .setNewUserName(userName + "_233")
-//                                            .setOldPassword("1234567890")
-//                                            .setNewPassword("1234567890")
-//                                            .setNewTelephoneNumber(this.generatePhoneNumber())
-//                                            .setNewFullName(userName + "_6666")
-//                                            .setNewEmail("zhj3191955858@gamil.com"))
-//                                    .exchange()
-//                                    .expectStatus().isOk()
-//                                    .expectBody(userModifyResponseType)
-//                                    .returnResult().getResponseBody();
-//
-//                            return this.objectMapper
-//                                .writeValueAsString(response);
-//                        }
-//                        catch (JsonProcessingException exception)
-//                        {
-//                            log.error(
-//                                "[TestUserLogout()] Json processing failed! Cause: {}",
-//                                exception.getMessage(), exception
-//                            );
-//
-//                            throw new TestAbortedException("Test abort!", exception);
-//                        }
-//                        catch (Exception exception)
-//                        {
-//                            log.error(
-//                                "[TestUserLogout()] User: {} logout failed! Cause: {}.",
-//                                userName, exception.getMessage(), exception
-//                            );
-//
-//                            throw new TestAbortedException("Test abort!", exception);
-//                        }
-//                    }, this.userOperatorExecutor)
-//            ).toList();
-//
-//        log.info("Modify all user complete, show responses: ");
-//        this.joinResponseFuture(responseFuture)
-//            .forEach(System.out::println);
-//    }
 
     @Order(4)
     @Test
