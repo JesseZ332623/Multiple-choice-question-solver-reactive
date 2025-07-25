@@ -7,7 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-/** 从 application.properties 配置文件中读取的部分属性信息。 */
+/** 从 application.properties 配置文件中读取的部分属性信息。*/
 @Slf4j
 @Getter
 @Component
@@ -25,6 +25,9 @@ public class ProjectProperties
 
     @Value("${file.upload-dir}")
     private String userArchivePath;
+
+    @Value("${file.upload.test-dir}")
+    private String testResultPath;
 
     @Value("${jwt.secret-key}")
     private String jwtSecretKey;
