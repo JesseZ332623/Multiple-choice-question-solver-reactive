@@ -24,7 +24,7 @@ import static com.jesse.examination.core.redis.keys.ProjectRedisKey.ENTERPRISE_E
 import static com.jesse.examination.core.redis.keys.ProjectRedisKey.SERVICE_AUTH_CODE;
 import static com.jesse.examination.core.logmakers.LogMakers.EMAIL_SENDER;
 
-/** 邮件验证码发送测试类。*/
+/** 邮件发送测试类。*/
 @Slf4j
 @SpringBootTest
 public class EmailSendTest
