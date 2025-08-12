@@ -4,6 +4,9 @@ import jakarta.annotation.Nullable;
 import lombok.*;
 import org.jetbrains.annotations.NotNull;
 
+import java.io.FileNotFoundException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 
 import static java.lang.String.format;
@@ -44,13 +47,41 @@ public class EmailContent
         emailContent.setTextBody(
             format(
                 "用户：%s 您的验证码是：[%s]，" +
-                    "请在 %s 分钟内完成验证，超过 %s 分钟后验证码自动失效！",
+                "请在 %s 分钟内完成验证，超过 %s 分钟后验证码自动失效！",
                 userName, varifyCode, expired.toMinutes(), expired.toMinutes()
             )
         );
 
         // 验证码邮件不需要附件内容
         emailContent.setAttachmentPath(null);
+
+        return emailContent;
+    }
+
+    public static @NotNull EmailContent
+    formWithAttachment(
+        String userName, String userEmail,
+        String message, String attachment) throws FileNotFoundException
+    {
+        EmailContent emailContent = new EmailContent();
+
+        emailContent.setTo(userEmail);
+        emailContent.setSubject("用户：" + userName + " 您有新的消息！");
+        emailContent.setTextBody(message);
+
+        Path attachmentPath
+            = Path.of(attachment).normalize();
+
+        if (!Files.exists(attachmentPath))
+        {
+            throw new FileNotFoundException(
+                format("Attachment path: %s not found!", attachmentPath)
+            );
+        }
+
+        emailContent.setAttachmentPath(
+            attachmentPath.toString()
+        );
 
         return emailContent;
     }
