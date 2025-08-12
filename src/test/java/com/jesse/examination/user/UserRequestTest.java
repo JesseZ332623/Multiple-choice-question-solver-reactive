@@ -228,7 +228,7 @@ public class UserRequestTest
         final ParameterizedTypeReference<ResponseBuilder.APIResponse<UserRegistrationDTO>>
             userRegisterResponse = new ParameterizedTypeReference<>() {};
 
-        final int CREATE_AMOUNT = 500;
+        final int CREATE_AMOUNT = 800;
 
         List<CompletableFuture<String>> responseFuture =
         IntStream.range(0, CREATE_AMOUNT)
