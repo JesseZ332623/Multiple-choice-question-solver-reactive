@@ -31,3 +31,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Test Data ###
+src/test/resources/User-Request-Test
