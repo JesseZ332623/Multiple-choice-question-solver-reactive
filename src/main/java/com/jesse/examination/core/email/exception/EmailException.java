@@ -22,7 +22,10 @@ public class EmailException extends RuntimeException
         INVALID_CONTENT,
 
         /** 配置属性错误。 */
-        CONFIG_MISSING
+        CONFIG_MISSING,
+
+        /** 附件不存在错误。*/
+        ATTACHMENT_NOT_EXIST
     }
 
     private final ErrorType errorType;
